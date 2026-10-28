@@ -971,9 +971,21 @@ app.get('/api/admin/overview', (req, res) => {
   }
 });
 
+// Serve frontend static build if available
+const clientDist = path.join(__dirname, '../client/dist');
+if (fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  app.use((req, res, next) => {
+    if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
+      return res.sendFile(path.join(clientDist, 'index.html'));
+    }
+    next();
+  });
+}
+
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`[MechConnect Backend] Running on http://localhost:${PORT}`);
-  console.log(`[MechConnect Backend] Socket.io active with real-time room dispatch`);
+  console.log(`[MechConnect Full-Stack Server] Active on http://localhost:${PORT}`);
+  console.log(`[MechConnect Full-Stack Server] Serving React UI + SQLite DB + Socket.io`);
 });
 
