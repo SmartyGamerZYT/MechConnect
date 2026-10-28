@@ -242,6 +242,15 @@ for (const alterSql of jobColumnsToAdd) {
   }
 }
 
+// Migration for mechanic_profiles: is_verified
+try {
+  db.exec("ALTER TABLE mechanic_profiles ADD COLUMN is_verified INTEGER DEFAULT 0");
+  // Seed established mechanics as verified
+  db.exec("UPDATE mechanic_profiles SET is_verified = 1 WHERE user_id IN ('usr_mech_rajesh', 'usr_mech_vikram', 'usr_team_precision')");
+} catch (e) {
+  // Already exists
+}
+
 // Seed function to populate rich demo dataset if empty
 function seedDatabase() {
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;

@@ -79,7 +79,7 @@ export default function MechanicProfileModal({
   return (
     <div className="fixed inset-0 z-[1250] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
       <div className="bg-[#1E1E1E] border border-[#2C2C2E] rounded-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl relative my-auto">
-        
+
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-[#2C2C2E] flex items-center justify-between bg-[#181818] flex-shrink-0">
           <div className="flex items-center gap-2">
@@ -100,7 +100,7 @@ export default function MechanicProfileModal({
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
-            
+
             {/* Profile Overview */}
             <div className="flex flex-col sm:flex-row items-start gap-4">
               <img
@@ -128,16 +128,16 @@ export default function MechanicProfileModal({
                     <MapPin className="w-3.5 h-3.5 text-[#00E5FF]" />
                     {mech?.city} ({mech?.service_radius_km} km radius)
                   </span>
-                  <span className="flex items-center gap-1 text-yellow-400 font-bold">
-                    ⭐ {mech?.rating} ({mech?.reviews_count} reviews)
-                  </span>
-                  <span className="flex items-center gap-1 text-white">
-                    <Briefcase className="w-3.5 h-3.5 text-[#32D74B]" />
-                    {mech?.total_jobs_completed} jobs completed
-                  </span>
-                  <span className="font-mono text-[#00E5FF] font-semibold">
-                    ₹{mech?.hourly_rate}/hr bench rate
-                  </span>
+                    <span className="flex items-center gap-1 text-slate-800 font-bold">
+                      Rating: {mech?.rating} ({mech?.reviews_count} reviews)
+                    </span>
+                    <span className="flex items-center gap-1 text-white">
+                      <Briefcase className="w-3.5 h-3.5 text-[#32D74B]" />
+                      {mech?.total_jobs_completed} jobs completed
+                    </span>
+                    <span className="font-mono text-[#00E5FF] font-semibold">
+                      ₹{mech?.hourly_rate}/hr bench rate
+                    </span>
                 </div>
               </div>
             </div>
@@ -146,9 +146,8 @@ export default function MechanicProfileModal({
             <div className="bg-[#141414] border border-[#2C2C2E] rounded-xl p-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className={`w-2.5 h-2.5 rounded-full ${
-                    mech?.availability_status === 'AVAILABLE_NOW' ? 'bg-[#32D74B] animate-pulse' : 'bg-[#FF9F0A]'
-                  }`}></span>
+                  <span className={`w-2.5 h-2.5 rounded-full ${mech?.availability_status === 'AVAILABLE_NOW' ? 'bg-[#32D74B] animate-pulse' : 'bg-[#FF9F0A]'
+                    }`}></span>
                   <span className="text-xs font-mono uppercase tracking-wider text-[#98989D]">
                     Dispatch Availability
                   </span>
@@ -167,11 +166,11 @@ export default function MechanicProfileModal({
                 <div>
                   <div className="text-sm font-bold text-white mb-1">
                     {mech?.availability_status === 'AVAILABLE_NOW' ? (
-                      <span className="text-[#32D74B]">🟢 Available Now for Emergency Dispatch</span>
+                      <span className="text-emerald-500">Available Now for Dispatch</span>
                     ) : mech?.availability_status === 'AVAILABLE_SOON' ? (
-                      <span className="text-[#FF9F0A]">🟠 Available Later Today</span>
+                      <span className="text-amber-500">Available Later Today</span>
                     ) : (
-                      <span className="text-[#98989D]">⚪ Offline / On Active Job</span>
+                      <span className="text-slate-400">Offline / On Job</span>
                     )}
                   </div>
                   <p className="text-xs text-gray-400 italic">
@@ -186,11 +185,10 @@ export default function MechanicProfileModal({
                         key={st}
                         type="button"
                         onClick={() => setStatusVal(st)}
-                        className={`p-2 rounded-lg text-xs font-mono font-bold border cursor-pointer ${
-                          statusVal === st
+                        className={`p-2 rounded-lg text-xs font-mono font-bold border cursor-pointer ${statusVal === st
                             ? 'bg-[#00E5FF]/20 border-[#00E5FF] text-[#00E5FF]'
                             : 'bg-[#1E1E1E] border-[#2C2C2E] text-[#98989D]'
-                        }`}
+                          }`}
                       >
                         {st.replace('_', ' ')}
                       </button>
@@ -258,74 +256,74 @@ export default function MechanicProfileModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {mech?.certifications?.map((c, i) => (
                   <div key={i} className="bg-[#141414] border border-[#2C2C2E] p-3 rounded-xl flex items-start gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-[#32D74B]/10 border border-[#32D74B]/30 flex items-center justify-center text-[#32D74B] flex-shrink-0">
-                      ✓
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-white leading-tight">{c.title}</div>
-                      <div className="text-[11px] text-[#98989D]">{c.issuer} &bull; {c.year}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Past Repair Portfolio with Photos */}
-            <div>
-              <div className="text-[10px] font-mono uppercase tracking-wider text-[#98989D] mb-2">
-                Past Case Studies & Repaired Machinery
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {mech?.portfolio?.map((item) => (
-                  <div key={item.id} className="bg-[#141414] border border-[#2C2C2E] rounded-xl overflow-hidden group">
-                    <div className="h-32 w-full overflow-hidden relative">
-                      <img src={item.image_url} className="w-full h-full object-cover group-hover:scale-105 transition" />
-                      <span className="absolute top-2 left-2 bg-black/80 backdrop-blur-md text-[#00E5FF] text-[9px] font-mono px-2 py-0.5 rounded border border-[#00E5FF]/40">
-                        {item.machine_type}
-                      </span>
-                    </div>
-                    <div className="p-3">
-                      <h4 className="text-xs font-bold text-white mb-1 leading-snug">{item.title}</h4>
-                      <p className="text-[11px] text-[#98989D] line-clamp-2">{item.description}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Verified Reviews */}
-            <div>
-              <div className="text-[10px] font-mono uppercase tracking-wider text-[#98989D] mb-2 flex items-center gap-1.5">
-                <Star className="w-3.5 h-3.5 text-yellow-400" />
-                Verified Plant Manager Reviews ({reviews.length})
-              </div>
-              <div className="space-y-2.5">
-                {reviews.length === 0 ? (
-                  <div className="text-xs text-[#98989D] bg-[#141414] p-4 rounded-xl text-center">
-                    No public reviews recorded yet.
-                  </div>
-                ) : (
-                  reviews.map((r) => (
-                    <div key={r.id} className="bg-[#141414] border border-[#2C2C2E] p-3 rounded-xl">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <div className="text-xs font-bold text-white flex items-center gap-2">
-                          <span>{r.company_name || 'Industrial Facility'}</span>
-                          <span className="text-yellow-400 font-mono text-[11px]">★ {r.rating}.0</span>
-                        </div>
-                        <span className="text-[10px] text-[#98989D] font-mono">{new Date(r.created_at).toLocaleDateString()}</span>
+                      <div className="w-8 h-8 rounded-lg bg-[#32D74B]/10 border border-[#32D74B]/30 flex items-center justify-center text-[#32D74B] flex-shrink-0 text-xs font-bold">
+                        OK
                       </div>
-                      <p className="text-xs text-gray-300 italic">"{r.review_text}"</p>
+                      <div>
+                        <div className="text-xs font-bold text-white leading-tight">{c.title}</div>
+                        <div className="text-[11px] text-[#98989D]">{c.issuer} &bull; {c.year}</div>
+                      </div>
                     </div>
-                  ))
-                )}
-              </div>
+                ))}
+                  </div>
             </div>
 
-          </div>
+              {/* Past Repair Portfolio with Photos */}
+              <div>
+                <div className="text-[10px] font-mono uppercase tracking-wider text-[#98989D] mb-2">
+                  Past Case Studies & Repaired Machinery
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {mech?.portfolio?.map((item) => (
+                    <div key={item.id} className="bg-[#141414] border border-[#2C2C2E] rounded-xl overflow-hidden group">
+                      <div className="h-32 w-full overflow-hidden relative">
+                        <img src={item.image_url} className="w-full h-full object-cover group-hover:scale-105 transition" />
+                        <span className="absolute top-2 left-2 bg-black/80 backdrop-blur-md text-[#00E5FF] text-[9px] font-mono px-2 py-0.5 rounded border border-[#00E5FF]/40">
+                          {item.machine_type}
+                        </span>
+                      </div>
+                      <div className="p-3">
+                        <h4 className="text-xs font-bold text-white mb-1 leading-snug">{item.title}</h4>
+                        <p className="text-[11px] text-[#98989D] line-clamp-2">{item.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Verified Reviews */}
+              <div>
+                <div className="text-[10px] font-mono uppercase tracking-wider text-[#98989D] mb-2 flex items-center gap-1.5">
+                  <Star className="w-3.5 h-3.5 text-yellow-400" />
+                  Verified Plant Manager Reviews ({reviews.length})
+                </div>
+                <div className="space-y-2.5">
+                  {reviews.length === 0 ? (
+                    <div className="text-xs text-[#98989D] bg-[#141414] p-4 rounded-xl text-center">
+                      No public reviews recorded yet.
+                    </div>
+                  ) : (
+                    reviews.map((r) => (
+                      <div key={r.id} className="bg-[#141414] border border-[#2C2C2E] p-3 rounded-xl">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="text-xs font-bold text-white flex items-center gap-2">
+                            <span>{r.company_name || 'Industrial Facility'}</span>
+                            <span className="text-amber-500 font-mono text-[11px]">Rating: {r.rating}.0</span>
+                          </div>
+                          <span className="text-[10px] text-[#98989D] font-mono">{new Date(r.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <p className="text-xs text-gray-300 italic">"{r.review_text}"</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+            </div>
         )}
 
-      </div>
+          </div>
     </div>
-  );
+      );
 }
 

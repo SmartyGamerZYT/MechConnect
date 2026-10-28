@@ -14,6 +14,14 @@ export const api = {
     const res = await fetch(`${API_BASE}/auth/users`);
     return res.json();
   },
+  login: async (email) => {
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    return res.json();
+  },
   register: async (userData) => {
     const res = await fetch(`${API_BASE}/auth/register`, {
       method: 'POST',
@@ -150,6 +158,14 @@ export const api = {
   // Admin
   getAdminOverview: async () => {
     const res = await fetch(`${API_BASE}/admin/overview`);
+    return res.json();
+  },
+  verifyTechnician: async (userId, action = 'approve') => {
+    const res = await fetch(`${API_BASE}/admin/verify-technician`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, action })
+    });
     return res.json();
   },
 

@@ -46,8 +46,8 @@ export default function MapView({ jobs = [], mechanics = [], onSelectJob, onSele
       const colorClass = isEmergency
         ? 'bg-[#FF453A] border-[#FF453A] shadow-[0_0_15px_#FF453A]'
         : isSameDay
-        ? 'bg-[#FF9F0A] border-[#FF9F0A] shadow-[0_0_12px_#FF9F0A]'
-        : 'bg-[#32D74B] border-[#32D74B] shadow-[0_0_10px_#32D74B]';
+          ? 'bg-[#FF9F0A] border-[#FF9F0A] shadow-[0_0_12px_#FF9F0A]'
+          : 'bg-[#32D74B] border-[#32D74B] shadow-[0_0_10px_#32D74B]';
 
       const iconHtml = `
         <div class="relative flex items-center justify-center cursor-pointer group">
@@ -74,13 +74,12 @@ export default function MapView({ jobs = [], mechanics = [], onSelectJob, onSele
       popupContent.className = 'p-3 bg-[#1E1E1E] text-white rounded-lg border border-[#2C2C2E] min-w-[240px] font-sans';
       popupContent.innerHTML = `
         <div class="flex items-center justify-between mb-1.5">
-          <span class="text-[10px] font-bold px-2 py-0.5 rounded ${
-            isEmergency
-              ? 'bg-[#FF453A]/20 text-[#FF453A] border border-[#FF453A]/40'
-              : isSameDay
-              ? 'bg-[#FF9F0A]/20 text-[#FF9F0A] border border-[#FF9F0A]/40'
-              : 'bg-[#32D74B]/20 text-[#32D74B] border border-[#32D74B]/40'
-          }">${job.urgency}</span>
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded ${isEmergency
+          ? 'bg-[#FF453A]/20 text-[#FF453A] border border-[#FF453A]/40'
+          : isSameDay
+            ? 'bg-[#FF9F0A]/20 text-[#FF9F0A] border border-[#FF9F0A]/40'
+            : 'bg-[#32D74B]/20 text-[#32D74B] border border-[#32D74B]/40'
+        }">${job.urgency}</span>
           <span class="text-xs text-[#98989D]">${job.city}</span>
         </div>
         <h4 class="font-bold text-sm text-white mb-1 leading-snug">${job.title}</h4>
@@ -114,7 +113,7 @@ export default function MapView({ jobs = [], mechanics = [], onSelectJob, onSele
         <div class="relative flex items-center justify-center cursor-pointer group">
           ${isAvailable ? '<div class="absolute w-7 h-7 rounded-full bg-[#00E5FF] opacity-30 animate-pulse"></div>' : ''}
           <div class="w-5 h-5 rounded-full border-2 ${isAvailable ? 'bg-[#00E5FF] border-[#FFFFFF]' : 'bg-[#98989D] border-[#2C2C2E]'} flex items-center justify-center text-[10px] text-black font-bold">
-            🔧
+            T
           </div>
           <div class="absolute -top-5 bg-[#1E1E1E]/90 border border-[#2C2C2E] text-[9px] text-[#00E5FF] px-1 py-0.2 rounded shadow whitespace-nowrap pointer-events-none">
             ${mech.full_name.split(' ')[0]}
@@ -142,7 +141,7 @@ export default function MapView({ jobs = [], mechanics = [], onSelectJob, onSele
           </div>
         </div>
         <div class="flex items-center justify-between text-[11px] text-[#98989D] mb-2 border-y border-[#2C2C2E] py-1.5">
-          <span>⭐ <b class="text-white">${mech.rating}</b> (${mech.reviews_count} reviews)</span>
+          <span>Rating: <b class="text-white">${mech.rating}</b> (${mech.reviews_count} reviews)</span>
           <span class="text-[#32D74B] font-semibold">${isAvailable ? 'Available Now' : 'Standby'}</span>
         </div>
         <button id="view-mech-${mech.user_id}" class="w-full bg-[#1E1E1E] hover:bg-[#2C2C2E] border border-[#00E5FF] text-[#00E5FF] font-semibold text-xs py-1.5 px-3 rounded flex items-center justify-center gap-1 transition">
