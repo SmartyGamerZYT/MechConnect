@@ -545,11 +545,11 @@ export default function JobDetailsModal({
                   <form onSubmit={handleApply} className="bg-[#141414] border border-[#00E5FF]/40 rounded-xl p-4 space-y-3">
                     <div className="text-xs font-bold text-[#00E5FF] flex items-center gap-1.5">
                       <Wrench className="w-3.5 h-3.5" />
-                      Submit On-Site Repair Proposal
+                      Submit On-Site Diagnostic & Repair Bid
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[10px] font-mono text-[#98989D] block mb-1">Your Proposed Price (₹)</label>
+                        <label className="text-[10px] font-mono text-[#98989D] block mb-1">Your Proposed Price (₹) *</label>
                         <input
                           type="number"
                           placeholder="e.g. 8500"
@@ -560,13 +560,13 @@ export default function JobDetailsModal({
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-mono text-[#98989D] block mb-1">Estimated Arrival ETA</label>
+                        <label className="text-[10px] font-mono text-[#98989D] block mb-1">Estimated Arrival ETA *</label>
                         <select
                           value={arrivalEta}
                           onChange={(e) => setArrivalEta(e.target.value)}
                           className="w-full bg-[#1E1E1E] border border-[#2C2C2E] rounded-lg px-3 py-1.5 text-xs text-white"
                         >
-                          <option value="20 mins">Within 20 mins (Ready in van)</option>
+                          <option value="20 mins">Within 20 mins (Ready in mobile van)</option>
                           <option value="35 mins">Within 35 mins</option>
                           <option value="1 hour">Within 1 hour</option>
                           <option value="Same Day (Afternoon)">Same Day (Afternoon shift)</option>
@@ -575,7 +575,7 @@ export default function JobDetailsModal({
                     </div>
                     <input
                       type="text"
-                      placeholder="Intro note (e.g. Equipped with Haas puller & dial indicator)"
+                      placeholder="Diagnostic proposal & tooling note (e.g. Haas spindle extractor & dial indicator ready)"
                       value={proposalMsg}
                       onChange={(e) => setProposalMsg(e.target.value)}
                       className="w-full bg-[#1E1E1E] border border-[#2C2C2E] rounded-lg px-3 py-1.5 text-xs text-white"
@@ -583,11 +583,24 @@ export default function JobDetailsModal({
                     <button
                       type="submit"
                       disabled={submittingProposal}
-                      className="bg-[#00E5FF] hover:bg-[#00c5dc] text-black font-extrabold text-xs px-4 py-2 rounded-lg transition cursor-pointer"
+                      className="bg-[#00E5FF] hover:bg-[#00c5dc] text-black font-extrabold text-xs px-5 py-2 rounded-lg transition cursor-pointer"
                     >
-                      {submittingProposal ? 'Broadcasting Proposal...' : 'SUBMIT REPAIR PROPOSAL'}
+                      {submittingProposal ? 'Broadcasting Proposal...' : 'CONFIRM & SUBMIT BID'}
                     </button>
                   </form>
+                )}
+
+                {/* If Mechanic already bid */}
+                {isMechanic && proposals.some(p => p.mechanic_user_id === currentUser.id) && (
+                  <div className="bg-[#141414] border border-[#32D74B]/40 rounded-xl p-3 text-xs text-[#32D74B] flex items-center justify-between font-mono">
+                    <span>✓ Your proposal has been submitted to the plant manager. Check bids list below.</span>
+                    <button
+                      onClick={() => onOpenChat(job.id)}
+                      className="bg-[#1E1E1E] text-white hover:text-[#00E5FF] px-2.5 py-1 rounded border border-[#2C2C2E] text-[11px]"
+                    >
+                      Open Chat Thread &rarr;
+                    </button>
+                  </div>
                 )}
 
                 {/* List of Proposals */}

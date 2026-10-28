@@ -86,6 +86,14 @@ CREATE TABLE IF NOT EXISTS jobs (
   machine_category TEXT NOT NULL,
   machine_brand TEXT,
   machine_model TEXT,
+  serial_number TEXT,
+  asset_tag TEXT,
+  year_of_manufacture TEXT,
+  operating_hours TEXT,
+  production_impact TEXT DEFAULT 'TOTAL_STOPPAGE', -- 'TOTAL_STOPPAGE', 'PARTIAL_HALT', 'QUALITY_DEFECT'
+  error_code TEXT,
+  hiring_mode TEXT DEFAULT 'BIDDING', -- 'BIDDING' or 'DIRECT'
+  direct_assigned_mechanic_id TEXT,
   fault_description TEXT NOT NULL,
   urgency TEXT NOT NULL, -- 'EMERGENCY', 'SAME_DAY', 'SCHEDULED'
   status TEXT DEFAULT 'OPEN', -- 'OPEN', 'MATCHED', 'ASSIGNED', 'ON_THE_WAY', 'WORKING', 'COMPLETED', 'CANCELLED'
@@ -213,6 +221,26 @@ CREATE TABLE IF NOT EXISTS disputes (
   FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
 );
 `);
+
+// Safe migrations for jobs table
+const jobColumnsToAdd = [
+  "ALTER TABLE jobs ADD COLUMN hiring_mode TEXT DEFAULT 'BIDDING'",
+  "ALTER TABLE jobs ADD COLUMN serial_number TEXT",
+  "ALTER TABLE jobs ADD COLUMN asset_tag TEXT",
+  "ALTER TABLE jobs ADD COLUMN year_of_manufacture TEXT",
+  "ALTER TABLE jobs ADD COLUMN operating_hours TEXT",
+  "ALTER TABLE jobs ADD COLUMN production_impact TEXT DEFAULT 'TOTAL_STOPPAGE'",
+  "ALTER TABLE jobs ADD COLUMN error_code TEXT",
+  "ALTER TABLE jobs ADD COLUMN direct_assigned_mechanic_id TEXT"
+];
+
+for (const alterSql of jobColumnsToAdd) {
+  try {
+    db.exec(alterSql);
+  } catch (err) {
+    // Column already exists, safe to ignore
+  }
+}
 
 // Seed function to populate rich demo dataset if empty
 function seedDatabase() {

@@ -2,7 +2,8 @@ import { io } from 'socket.io-client';
 
 const API_BASE = '/api';
 
-export const socket = io('/', {
+export const socket = io(typeof window !== 'undefined' ? window.location.origin : '', {
+  transports: ['polling', 'websocket'],
   autoConnect: true,
   reconnection: true
 });

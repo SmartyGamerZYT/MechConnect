@@ -129,7 +129,7 @@ app.get('/api/auth/users', (req, res) => {
 
 app.post('/api/auth/register', (req, res) => {
   try {
-    const { name, email, phone, role, company_name, industry_type, city, skills, experience } = req.body;
+    const { name, email, phone, role, company_name, industry_type, city, skills, experience, avatar_url, certifications, portfolio, hourly_rate, headline } = req.body;
     if (!name || !email || !role) {
       return res.status(400).json({ error: 'Name, email, and role are required' });
     }
@@ -141,12 +141,12 @@ app.post('/api/auth/register', (req, res) => {
     }
 
     const userId = 'usr_' + Date.now();
-    const avatarUrl = `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(name)}`;
+    const finalAvatar = avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(name)}`;
 
     db.prepare(`
       INSERT INTO users (id, role, email, name, phone, avatar_url)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(userId, role, email, name, phone || '+91 99000 00000', avatarUrl);
+    `).run(userId, role, email, name, phone || '+91 99000 00000', finalAvatar);
 
     if (role === 'company') {
       db.prepare(`
@@ -162,19 +162,25 @@ app.post('/api/auth/register', (req, res) => {
       );
     } else if (role === 'mechanic') {
       const parsedSkills = Array.isArray(skills) ? skills : (skills ? skills.split(',').map(s => s.trim()) : ['CNC Machines', 'Hydraulic Systems']);
+      const parsedCerts = Array.isArray(certifications) ? JSON.stringify(certifications) : '[]';
+      const parsedPortfolio = Array.isArray(portfolio) ? JSON.stringify(portfolio) : '[]';
+
       db.prepare(`
         INSERT INTO mechanic_profiles (
-          id, user_id, full_name, headline, bio, city, years_experience, skills, availability_status, verification_tier
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'AVAILABLE_NOW', 'TIER_2')
+          id, user_id, full_name, headline, bio, city, years_experience, skills, certifications, portfolio, hourly_rate, availability_status, verification_tier
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'AVAILABLE_NOW', 'TIER_3_CERTIFIED')
       `).run(
         'mp_' + Date.now(),
         userId,
         name,
-        'Certified Field Technician',
-        'Ready for on-site industrial diagnostic and rapid repairs.',
+        headline || 'Certified Field Technician & Industrial Specialist',
+        'Specialist equipped for rapid diagnostic and emergency machine repairs.',
         city || 'Pune',
         parseInt(experience, 10) || 5,
-        JSON.stringify(parsedSkills)
+        JSON.stringify(parsedSkills),
+        parsedCerts,
+        parsedPortfolio,
+        parseFloat(hourly_rate) || 750
       );
     }
 
@@ -311,7 +317,7 @@ app.get('/api/jobs/:id', (req, res) => {
   }
 });
 
-// 5. Post Job (under 2 minutes form)
+// 5. Post Job (supports all machine details, photos, and Bidding vs. Direct Hiring)
 app.post('/api/jobs', (req, res) => {
   try {
     const {
@@ -320,6 +326,14 @@ app.post('/api/jobs', (req, res) => {
       machine_category,
       machine_brand,
       machine_model,
+      serial_number,
+      asset_tag,
+      year_of_manufacture,
+      operating_hours,
+      production_impact,
+      error_code,
+      hiring_mode, // 'BIDDING' or 'DIRECT' (Urban Company style)
+      direct_assigned_mechanic_id,
       fault_description,
       urgency,
       lat,
@@ -340,13 +354,18 @@ app.post('/api/jobs', (req, res) => {
     const jobId = `MC-2026-${String(count + 105).padStart(4, '0')}`;
 
     const parsedImages = Array.isArray(images) ? JSON.stringify(images) : '[]';
+    const isDirectHire = hiring_mode === 'DIRECT' && direct_assigned_mechanic_id;
+    const initialStatus = isDirectHire ? 'ASSIGNED' : 'OPEN';
+    const fixedAgreedPrice = isDirectHire ? (parseFloat(budget_min) || 4500) : null;
 
     db.prepare(`
       INSERT INTO jobs (
         id, company_user_id, title, machine_category, machine_brand, machine_model,
+        serial_number, asset_tag, year_of_manufacture, operating_hours, production_impact, error_code,
+        hiring_mode, direct_assigned_mechanic_id, assigned_mechanic_user_id, agreed_price,
         fault_description, urgency, status, lat, lng, address, city,
         budget_min, budget_max, is_budget_open, images, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
     `).run(
       jobId,
       company_user_id,
@@ -354,8 +373,19 @@ app.post('/api/jobs', (req, res) => {
       machine_category,
       machine_brand || '',
       machine_model || '',
+      serial_number || '',
+      asset_tag || '',
+      year_of_manufacture || '',
+      operating_hours || '',
+      production_impact || 'TOTAL_STOPPAGE',
+      error_code || '',
+      hiring_mode || 'BIDDING',
+      direct_assigned_mechanic_id || null,
+      isDirectHire ? direct_assigned_mechanic_id : null,
+      fixedAgreedPrice,
       fault_description,
       urgency,
+      initialStatus,
       parseFloat(lat) || 18.6276,
       parseFloat(lng) || 73.8447,
       address,
@@ -369,13 +399,46 @@ app.post('/api/jobs', (req, res) => {
     // Record creation in history
     db.prepare(`
       INSERT INTO job_history (id, job_id, status, note, updated_by_user_id)
-      VALUES (?, ?, 'OPEN', ?, ?)
+      VALUES (?, ?, ?, ?, ?)
     `).run(
       'jh_' + Date.now(),
       jobId,
-      `Breakdown job created under ${urgency} urgency protocol. Auto-match broadcast dispatched.`,
+      initialStatus,
+      isDirectHire 
+        ? `Direct Hire (Urban Company style) dispatched to technician. Job assigned at ₹${fixedAgreedPrice}.`
+        : `Breakdown job created under ${urgency} protocol (${hiring_mode || 'BIDDING'}). Open for technician bids.`,
       company_user_id
     );
+
+    // If Direct Hire, create locked Quote Card immediately
+    if (isDirectHire) {
+      const quoteId = 'qc_' + Date.now();
+      db.prepare(`
+        INSERT INTO quote_cards (
+          id, job_id, company_user_id, mechanic_user_id,
+          agreed_price, scope_summary, agreed_start_time, company_confirmed_at, mechanic_confirmed_at, is_locked
+        ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'), 1)
+      `).run(
+        quoteId,
+        jobId,
+        company_user_id,
+        direct_assigned_mechanic_id,
+        fixedAgreedPrice,
+        `Direct Urban-Company style booking for ${title}. Technician dispatched under ${urgency} SLA.`
+      );
+
+      // Add system message in chat
+      db.prepare(`
+        INSERT INTO messages (id, job_id, sender_user_id, sender_role, message_text, is_quote_card, quote_card_id)
+        VALUES (?, ?, ?, 'system', ?, 1, ?)
+      `).run(
+        'msg_' + Date.now(),
+        jobId,
+        company_user_id,
+        `[DIRECT DISPATCH LOCKED] Direct hire confirmed at ₹${fixedAgreedPrice}. Technician assigned under ${urgency} protocol.`,
+        quoteId
+      );
+    }
 
     // Broadcast new job to all connected sockets
     io.emit('new_job_posted', {
@@ -383,10 +446,11 @@ app.post('/api/jobs', (req, res) => {
       title,
       urgency,
       machine_category,
+      hiring_mode: hiring_mode || 'BIDDING',
       city
     });
 
-    res.json({ success: true, jobId });
+    res.json({ success: true, jobId, isDirectHire });
   } catch (err) {
     console.error('Error creating job:', err);
     res.status(500).json({ error: 'Failed to post job' });
@@ -428,8 +492,9 @@ app.post('/api/jobs/:id/apply', (req, res) => {
       `[PROPOSAL SUBMITTED] Proposed: ₹${proposed_price} | ETA: ${estimated_arrival || '30 mins'}. "${message || ''}"`
     );
 
-    // Notify room
+    // Notify room and broadcast
     io.to(`job_${jobId}`).emit('proposal_update', { jobId, proposalId, action: 'applied' });
+    io.emit('proposal_update', { jobId, proposalId, action: 'applied' });
 
     res.json({ success: true, proposalId });
   } catch (err) {
@@ -663,6 +728,7 @@ app.post('/api/chats/:jobId', (req, res) => {
     };
 
     io.to(`job_${jobId}`).emit('new_message', fullMessage);
+    io.emit('new_message', fullMessage);
 
     res.json(fullMessage);
   } catch (err) {
@@ -755,8 +821,15 @@ app.put('/api/mechanics/:userId', (req, res) => {
     const {
       full_name, headline, bio, city, service_radius_km, years_experience,
       skills, certifications, portfolio, availability_status, availability_note,
-      hourly_rate
+      hourly_rate, avatar_url
     } = req.body;
+
+    if (avatar_url) {
+      db.prepare('UPDATE users SET avatar_url = ? WHERE id = ?').run(avatar_url, userId);
+    }
+    if (full_name) {
+      db.prepare('UPDATE users SET name = ? WHERE id = ?').run(full_name, userId);
+    }
 
     db.prepare(`
       UPDATE mechanic_profiles
@@ -781,9 +854,9 @@ app.put('/api/mechanics/:userId', (req, res) => {
       city || null,
       service_radius_km ? parseInt(service_radius_km, 10) : null,
       years_experience ? parseInt(years_experience, 10) : null,
-      skills ? JSON.stringify(skills) : null,
-      certifications ? JSON.stringify(certifications) : null,
-      portfolio ? JSON.stringify(portfolio) : null,
+      skills ? (Array.isArray(skills) ? JSON.stringify(skills) : skills) : null,
+      certifications ? (Array.isArray(certifications) ? JSON.stringify(certifications) : certifications) : null,
+      portfolio ? (Array.isArray(portfolio) ? JSON.stringify(portfolio) : portfolio) : null,
       availability_status || null,
       availability_note !== undefined ? availability_note : null,
       hourly_rate ? parseFloat(hourly_rate) : null,

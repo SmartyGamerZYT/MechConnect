@@ -61,7 +61,13 @@ export default function ChatModal({
     socket.on('new_message', handleNewMessage);
     socket.on('job_status_change', handleStatusChange);
 
+    // Reliable fallback poller every 2.5 seconds
+    const interval = setInterval(() => {
+      fetchChatData();
+    }, 2500);
+
     return () => {
+      clearInterval(interval);
       socket.emit('leave_job', jobId);
       socket.off('new_message', handleNewMessage);
       socket.off('job_status_change', handleStatusChange);
@@ -78,15 +84,23 @@ export default function ChatModal({
     e?.preventDefault();
     if (!inputText.trim()) return;
 
+    const currentText = inputText.trim();
+    setInputText('');
+
     const payload = {
       sender_user_id: currentUser.id,
       sender_role: currentUser.role,
-      message_text: inputText.trim()
+      message_text: currentText
     };
 
-    setInputText('');
     try {
-      await api.sendMessage(jobId, payload);
+      const res = await api.sendMessage(jobId, payload);
+      if (res && res.id) {
+        setMessages((prev) => {
+          if (prev.some(m => m.id === res.id)) return prev;
+          return [...prev, res];
+        });
+      }
     } catch (err) {
       console.error('Send error:', err);
     }
