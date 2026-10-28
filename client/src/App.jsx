@@ -8,6 +8,8 @@ import ChatModal from './components/ChatModal';
 import TechnicianProfileEditModal from './components/TechnicianProfileEditModal';
 import CompanyProfileModal from './components/CompanyProfileModal';
 import AuthModal from './components/AuthModal';
+import WalletModal from './components/WalletModal';
+import ReceiptModal from './components/ReceiptModal';
 import { api, socket } from './services/api';
 import {
   Wrench,
@@ -15,7 +17,8 @@ import {
   Shield,
   LogOut,
   User,
-  AlertTriangle
+  AlertTriangle,
+  Wallet
 } from 'lucide-react';
 
 export default function App() {
@@ -23,6 +26,7 @@ export default function App() {
   const [jobs, setJobs] = useState([]);
   const [mechanics, setMechanics] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [walletBalance, setWalletBalance] = useState(0);
 
   // Modals
   const [isPostJobOpen, setIsPostJobOpen] = useState(false);
@@ -31,266 +35,309 @@ export default function App() {
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [activeCompanyId, setActiveCompanyId] = useState(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isWalletOpen, setIsWalletOpen] = useState(false);
+  const [activeReceiptJobId, setActiveReceiptJobId] = useState(null);
 
-    // Initialize from localStorage or fallback
-    const initApp = async () => {
-      setLoading(true);
-      try {
-        const [usersData, jobsData, mechsData] = await Promise.all([
-          api.getUsers(),
-          api.getJobs(),
-          api.getMechanics()
-        ]);
+  // Initialize from localStorage or fallback
+  const initApp = async () => {
+    try {
+      const [usersData, jobsData, mechsData] = await Promise.all([
+        api.getUsers(),
+        api.getJobs(),
+        api.getMechanics()
+      ]);
 
-        setJobs(jobsData);
-        setMechanics(mechsData);
+      setJobs(jobsData);
+      setMechanics(mechsData);
 
-          // Check saved user in localStorage
-          const savedUserStr = localStorage.getItem('mechconnect_user');
-          if (savedUserStr) {
-            try {
-              const parsed = JSON.parse(savedUserStr);
-              // Find fresh data for this user
-              const freshUser = usersData.find(u => u.id === parsed.id) || parsed;
-              setCurrentUser(freshUser);
-            } catch (e) {
-              setCurrentUser(usersData[0] || null);
-            }
-          } else if (usersData.length > 0) {
-            // Default to company user
-            const defaultUser = usersData.find(u => u.role === 'company') || usersData[0];
-            setCurrentUser(defaultUser);
-            localStorage.setItem('mechconnect_user', JSON.stringify(defaultUser));
-          }
-        } catch (err) {
-          console.error('Init error:', err);
-        } finally {
-          setLoading(false);
+      const savedUserStr = localStorage.getItem('mechconnect_user');
+      let activeU = null;
+      if (savedUserStr) {
+        try {
+          const parsed = JSON.parse(savedUserStr);
+          activeU = usersData.find(u => u.id === parsed.id) || parsed;
+        } catch (e) {
+          activeU = null;
         }
-      };
+      } else if (usersData.length > 0) {
+        activeU = usersData.find(u => u.role === 'company') || usersData[0];
+        localStorage.setItem('mechconnect_user', JSON.stringify(activeU));
+      }
 
-      useEffect(() => {
-        initApp();
+      setCurrentUser(activeU);
 
-          const handleNewJob = () => {
-            api.getJobs().then(setJobs);
-          };
-          const handleStatusChange = () => {
-            api.getJobs().then(setJobs);
-          };
-          const handleProposalUpdate = () => {
-            api.getJobs().then(setJobs);
-          };
-          const handleTechnicianVerified = ({ user_id, is_verified }) => {
-            // If current user was verified, update state
-            setCurrentUser(prev => {
-              if (prev && prev.id === user_id) {
-                const updated = { ...prev, mechanic_is_verified: is_verified };
-                localStorage.setItem('mechconnect_user', JSON.stringify(updated));
-                return updated;
-              }
-              return prev;
-            });
-            api.getMechanics().then(setMechanics);
-          };
+      if (activeU?.id) {
+        api.getWallet(activeU.id).then(res => {
+          if (res?.wallet) setWalletBalance(res.wallet.balance || 0);
+        }).catch(() => {});
+      }
+    } catch (err) {
+      console.error('Init error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-          socket.on('new_job_posted', handleNewJob);
-          socket.on('job_status_change', handleStatusChange);
-          socket.on('proposal_update', handleProposalUpdate);
-          socket.on('technician_verified', handleTechnicianVerified);
+  useEffect(() => {
+    initApp();
 
-          return () => {
-            socket.off('new_job_posted', handleNewJob);
-            socket.off('job_status_change', handleStatusChange);
-            socket.off('proposal_update', handleProposalUpdate);
-            socket.off('technician_verified', handleTechnicianVerified);
-          };
-        }, []);
+    const handleNewJob = () => api.getJobs().then(setJobs);
+    const handleStatusChange = () => {
+      api.getJobs().then(setJobs);
+      if (currentUser?.id) {
+        api.getWallet(currentUser.id).then(res => {
+          if (res?.wallet) setWalletBalance(res.wallet.balance || 0);
+        }).catch(() => {});
+      }
+    };
+    const handleProposalUpdate = () => api.getJobs().then(setJobs);
+    const handleTechnicianVerified = ({ user_id, is_verified }) => {
+      setCurrentUser(prev => {
+        if (prev && prev.id === user_id) {
+          const updated = { ...prev, mechanic_is_verified: is_verified };
+          localStorage.setItem('mechconnect_user', JSON.stringify(updated));
+          return updated;
+        }
+        return prev;
+      });
+      api.getMechanics().then(setMechanics);
+    };
 
-        const handleLoginSuccess = (user) => {
-          setCurrentUser(user);
-          localStorage.setItem('mechconnect_user', JSON.stringify(user));
-        };
+    socket.on('new_job_posted', handleNewJob);
+    socket.on('job_status_change', handleStatusChange);
+    socket.on('job_deleted', handleStatusChange);
+    socket.on('proposal_update', handleProposalUpdate);
+    socket.on('technician_verified', handleTechnicianVerified);
 
-        const handleSignOut = () => {
-          localStorage.removeItem('mechconnect_user');
-          setCurrentUser(null);
-          setIsAuthOpen(true);
-        };
+    return () => {
+      socket.off('new_job_posted', handleNewJob);
+      socket.off('job_status_change', handleStatusChange);
+      socket.off('job_deleted', handleStatusChange);
+      socket.off('proposal_update', handleProposalUpdate);
+      socket.off('technician_verified', handleTechnicianVerified);
+    };
+  }, []);
 
-        const handleJobCreated = (jobId) => {
-          api.getJobs().then(setJobs);
-          setActiveJobId(jobId);
-        };
+  const handleLoginSuccess = (user) => {
+    setCurrentUser(user);
+    localStorage.setItem('mechconnect_user', JSON.stringify(user));
+    if (user?.id) {
+      api.getWallet(user.id).then(res => {
+        if (res?.wallet) setWalletBalance(res.wallet.balance || 0);
+      }).catch(() => {});
+    }
+  };
 
-        if (loading) {
-          return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500 text-xs">
-              Loading...
+  const handleSignOut = () => {
+    localStorage.removeItem('mechconnect_user');
+    setCurrentUser(null);
+    setIsAuthOpen(true);
+  };
+
+  const handleJobCreated = (jobId) => {
+    api.getJobs().then(setJobs);
+    setActiveJobId(jobId);
+  };
+
+  const refreshWalletBalance = () => {
+    if (currentUser?.id) {
+      api.getWallet(currentUser.id).then(res => {
+        if (res?.wallet) setWalletBalance(res.wallet.balance || 0);
+      }).catch(() => {});
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500 text-xs">
+        Loading MechConnect industrial marketplace...
+      </div>
+    );
+  }
+
+  const userRole = currentUser?.role || 'company';
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
+      
+      {/* Top Navbar */}
+      <header className="sticky top-0 z-[1000] bg-white border-b border-slate-200 px-4 lg:px-8 py-3">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          
+          {/* Logo with Wrench icon as before */}
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white">
+              <Wrench className="w-4 h-4 text-white" />
             </div>
-          );
-        }
+            <div>
+              <span className="font-extrabold text-base tracking-tight text-slate-900">MechConnect</span>
+              <span className="text-[10px] text-slate-400 font-mono ml-2">Industrial</span>
+            </div>
+          </div>
 
-        // Determine which dashboard to display based strictly on login credentials
-        const userRole = currentUser?.role || 'company';
-
-        return (
-            <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
-
-                  {/* Top Navbar */}
-                  <header className="sticky top-0 z-[1000] bg-white border-b border-slate-200 px-4 lg:px-8 py-3">
-                    <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-
-                          {/* Brand */}
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white font-bold text-sm">
-                              M
-                            </div>
-                            <div>
-                              <span className="font-extrabold text-base tracking-tight text-slate-900">MechConnect</span>
-                              <span className="text-[10px] text-slate-400 font-mono ml-2">Industrial</span>
-                            </div>
-                          </div>
-
-                                  {/* User Account & Actions */}
-                                  <div className="flex items-center gap-2">
-                                    {currentUser ? (
+          {/* User Account & Actions */}
+          <div className="flex items-center gap-2.5">
+            {currentUser ? (
               <div className="flex items-center gap-3">
-                <div className="text-right">
+                
+                {/* Wallet Pill */}
+                <button
+                  onClick={() => setIsWalletOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-xs font-semibold transition cursor-pointer shadow-2xs"
+                >
+                  <Wallet className="w-3.5 h-3.5 text-slate-700" />
+                  <span>Wallet: <b className="font-mono text-slate-900">₹{walletBalance.toLocaleString()}</b></span>
+                </button>
+
+                <div className="text-right hidden sm:block">
                   <div className="text-xs font-semibold text-slate-900">
                     {currentUser.name}
                   </div>
                   <div className="text-[10px] text-slate-500 uppercase font-mono">
-                    {userRole === 'company' ? 'Company Account' : userRole === 'mechanic' ? 'Technician Account' : 'Admin'}
+                    {userRole === 'company' ? 'Company' : userRole === 'mechanic' ? 'Technician' : 'Admin'}
                   </div>
                 </div>
 
-                                      <button
-                                        onClick={handleSignOut}
-                                        title="Switch / Sign Out"
-                                        className="p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition cursor-pointer flex items-center gap-1.5 text-xs"
-                                      >
-                                        <LogOut className="w-3.5 h-3.5" />
-                                        <span className="hidden sm:inline">Sign Out</span>
-                                      </button>
-                                    </div>
-                                  ) : (
-                                  <button
-                                    onClick={() => setIsAuthOpen(true)}
-                                    className="bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs px-4 py-2 rounded-lg transition cursor-pointer"
-                                  >
-                                    Sign In
-                                  </button>
+                <button
+                  onClick={handleSignOut}
+                  title="Sign Out / Switch"
+                  className="p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition cursor-pointer flex items-center gap-1.5 text-xs"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Sign Out</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setIsAuthOpen(true)}
+                className="bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs px-4 py-2 rounded-lg transition cursor-pointer"
+              >
+                Sign In
+              </button>
             )}
-                                </div>
+          </div>
 
-                              </div>
-                            </header>
+        </div>
+      </header>
 
-                            {/* DASHBOARD RENDERED STRICTLY BASED ON CREDENTIALS */}
-                            <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-8">
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-8">
+        {!currentUser ? (
+          <div className="flex flex-col items-center justify-center p-12 text-center min-h-[50vh] bg-white rounded-xl border border-slate-200">
+            <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center text-white mb-3">
+              <Wrench className="w-6 h-6 text-white" />
+            </div>
+            <h2 className="text-base font-bold text-slate-900 mb-1">MechConnect Sign In</h2>
+            <div className="text-xs text-slate-500 mb-5">Please sign in to access your role-based dashboard</div>
+            <button
+              onClick={() => setIsAuthOpen(true)}
+              className="bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs px-5 py-2 rounded-lg transition cursor-pointer"
+            >
+              Sign In / Register
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* If logged in as Company */}
+            {userRole === 'company' && (
+              <CompanyDashboardView
+                currentUser={currentUser}
+                jobs={jobs}
+                mechanics={mechanics}
+                onOpenPostJob={() => setIsPostJobOpen(true)}
+                onSelectJob={(jobId) => setActiveJobId(jobId)}
+                onOpenChat={(jobId) => setActiveChatJobId(jobId)}
+                onOpenProfile={(companyId) => setActiveCompanyId(companyId)}
+                onOpenReceipt={(jobId) => setActiveReceiptJobId(jobId)}
+                onRefreshData={initApp}
+              />
+            )}
 
-                              {!currentUser ? (
-                                <div className="flex flex-col items-center justify-center p-12 text-center min-h-[50vh] bg-white rounded-xl border border-slate-200">
-                                  <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center text-white font-bold text-base mb-3">
-                                    M
-                                  </div>
-                                  <h2 className="text-base font-bold text-slate-900 mb-1">MechConnect Sign In</h2>
-                                  <div className="text-xs text-slate-500 mb-5">Please sign in to access your account dashboard</div>
-                                  <button
-                                    onClick={() => setIsAuthOpen(true)}
-                                    className="bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs px-5 py-2 rounded-lg transition cursor-pointer"
-                                  >
-                                    Sign In / Register
-                                  </button>
-                                </div>
-                              ) : (
-                                <>
-                                  {/* If logged in as Company */}
-                                  {userRole === 'company' && (
-                                    <CompanyDashboardView
-                                      currentUser={currentUser}
-                                      jobs={jobs}
-                                      mechanics={mechanics}
-                                      onOpenPostJob={() => setIsPostJobOpen(true)}
-                                      onSelectJob={(jobId) => setActiveJobId(jobId)}
-                                      onOpenChat={(jobId) => setActiveChatJobId(jobId)}
-                                      onOpenProfile={(companyId) => setActiveCompanyId(companyId)}
-                                    />
-                                  )}
-
-                                  {/* If logged in as Technician */}
-                                  {userRole === 'mechanic' && (
-                                    <TechnicianDashboardView
-                                      currentUser={currentUser}
-                                      jobs={jobs}
-                                      onSelectJob={(jobId) => setActiveJobId(jobId)}
-                                      onOpenChat={(jobId) => setActiveChatJobId(jobId)}
-                                      onOpenEditProfile={() => setIsEditProfileOpen(true)}
-                                      onRefreshData={initApp}
-                                    />
-                                  )}
+            {/* If logged in as Technician */}
+            {userRole === 'mechanic' && (
+              <TechnicianDashboardView
+                currentUser={currentUser}
+                jobs={jobs}
+                onSelectJob={(jobId) => setActiveJobId(jobId)}
+                onOpenChat={(jobId) => setActiveChatJobId(jobId)}
+                onOpenEditProfile={() => setIsEditProfileOpen(true)}
+                onOpenReceipt={(jobId) => setActiveReceiptJobId(jobId)}
+                onRefreshData={initApp}
+              />
+            )}
 
             {/* If logged in as Admin */}
-                                  {userRole === 'admin' && (
-                                    <AdminDashboardView
-                                      onSelectJob={(jobId) => setActiveJobId(jobId)}
-                                      onOpenChat={(jobId) => setActiveChatJobId(jobId)}
-                                    />
-                                  )}
-                                </>
-                              )}
+            {userRole === 'admin' && (
+              <AdminDashboardView
+                onSelectJob={(jobId) => setActiveJobId(jobId)}
+                onOpenChat={(jobId) => setActiveChatJobId(jobId)}
+              />
+            )}
+          </>
+        )}
+      </main>
 
-                            </main>
+      {/* MODALS */}
+      <PostJobModal
+        isOpen={isPostJobOpen}
+        onClose={() => setIsPostJobOpen(false)}
+        currentUser={currentUser}
+        mechanics={mechanics}
+        onJobCreated={handleJobCreated}
+      />
 
-                            {/* MODALS */}
-                            <PostJobModal
-                              isOpen={isPostJobOpen}
-                              onClose={() => setIsPostJobOpen(false)}
-                              currentUser={currentUser}
-                              mechanics={mechanics}
-                              onJobCreated={handleJobCreated}
-                            />
+      <JobDetailsModal
+        jobId={activeJobId}
+        isOpen={!!activeJobId}
+        onClose={() => setActiveJobId(null)}
+        currentUser={currentUser}
+        onOpenChat={(jobId) => {
+          setActiveJobId(null);
+          setActiveChatJobId(jobId);
+        }}
+        onRefreshData={initApp}
+      />
 
-                            <JobDetailsModal
-                              jobId={activeJobId}
-                              isOpen={!!activeJobId}
-                              onClose={() => setActiveJobId(null)}
-                              currentUser={currentUser}
-                              onOpenChat={(jobId) => {
-                                setActiveJobId(null);
-                                setActiveChatJobId(jobId);
-                              }}
-                              onRefreshData={initApp}
-                            />
+      <ChatModal
+        jobId={activeChatJobId}
+        isOpen={!!activeChatJobId}
+        onClose={() => setActiveChatJobId(null)}
+        currentUser={currentUser}
+      />
 
-                            <ChatModal
-                              jobId={activeChatJobId}
-                              isOpen={!!activeChatJobId}
-                              onClose={() => setActiveChatJobId(null)}
-                              currentUser={currentUser}
-                            />
+      <TechnicianProfileEditModal
+        isOpen={isEditProfileOpen}
+        onClose={() => setIsEditProfileOpen(false)}
+        currentUser={currentUser}
+        onProfileUpdated={initApp}
+      />
 
-                            <TechnicianProfileEditModal
-                              isOpen={isEditProfileOpen}
-                              onClose={() => setIsEditProfileOpen(false)}
-                              currentUser={currentUser}
-                              onProfileUpdated={initApp}
-                            />
+      <CompanyProfileModal
+        companyUserId={activeCompanyId}
+        isOpen={!!activeCompanyId}
+        onClose={() => setActiveCompanyId(null)}
+        currentUser={currentUser}
+      />
 
-                            <CompanyProfileModal
-                              companyUserId={activeCompanyId}
-                              isOpen={!!activeCompanyId}
-                              onClose={() => setActiveCompanyId(null)}
-                              currentUser={currentUser}
-                            />
+      <WalletModal
+        isOpen={isWalletOpen}
+        onClose={() => setIsWalletOpen(false)}
+        currentUser={currentUser}
+        onBalanceUpdated={refreshWalletBalance}
+      />
 
-                            <AuthModal
-                              isOpen={isAuthOpen}
-                              onClose={() => setIsAuthOpen(false)}
-                              onAuthSuccess={handleLoginSuccess}
-                            />
+      <ReceiptModal
+        jobId={activeReceiptJobId}
+        isOpen={!!activeReceiptJobId}
+        onClose={() => setActiveReceiptJobId(null)}
+      />
 
-                          </div>
-                          );
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onAuthSuccess={handleLoginSuccess}
+      />
+
+    </div>
+  );
 }

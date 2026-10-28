@@ -60,6 +60,22 @@ export const api = {
     });
     return res.json();
   },
+  deleteJob: async (jobId, userId) => {
+    const res = await fetch(`${API_BASE}/jobs/${jobId}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId })
+    });
+    return res.json();
+  },
+  completeJob: async (jobId, data) => {
+    const res = await fetch(`${API_BASE}/jobs/${jobId}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return res.json();
+  },
 
   // Proposals & Quotes
   applyToJob: async (id, proposalData) => {
@@ -67,6 +83,14 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(proposalData)
+    });
+    return res.json();
+  },
+  cancelBid: async (jobId, proposalId, mechanicUserId) => {
+    const res = await fetch(`${API_BASE}/jobs/${jobId}/proposals/${proposalId}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mechanic_user_id: mechanicUserId })
     });
     return res.json();
   },
@@ -98,6 +122,40 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(messageData)
     });
+    return res.json();
+  },
+
+  // Receipts
+  getReceipt: async (jobId) => {
+    const res = await fetch(`${API_BASE}/receipts/${jobId}`);
+    return res.json();
+  },
+
+  // Wallet
+  getWallet: async (userId) => {
+    const res = await fetch(`${API_BASE}/wallet/${userId}`);
+    return res.json();
+  },
+  withdrawFunds: async (userId, amount, bankAccount) => {
+    const res = await fetch(`${API_BASE}/wallet/withdraw`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, amount, bankAccount })
+    });
+    return res.json();
+  },
+  topupWallet: async (userId, amount) => {
+    const res = await fetch(`${API_BASE}/wallet/topup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, amount })
+    });
+    return res.json();
+  },
+
+  // Analytics
+  getAnalytics: async (role, userId) => {
+    const res = await fetch(`${API_BASE}/analytics/${role}/${userId}`);
     return res.json();
   },
 
@@ -168,8 +226,16 @@ export const api = {
     });
     return res.json();
   },
+  adminJobInspect: async (jobId) => {
+    const res = await fetch(`${API_BASE}/admin/job-deep-inspect/${jobId}`);
+    return res.json();
+  },
+  adminTechnicianInspect: async (userId) => {
+    const res = await fetch(`${API_BASE}/admin/technician-deep-inspect/${userId}`);
+    return res.json();
+  },
 
-  // Upload File/Image (persisted to disk + DB)
+  // Upload File/Image
   uploadFile: async (file, uploadedByUserId, entityType = 'general', entityId = null) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -184,4 +250,3 @@ export const api = {
     return res.json();
   }
 };
-

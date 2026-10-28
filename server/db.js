@@ -220,6 +220,42 @@ CREATE TABLE IF NOT EXISTS disputes (
   created_at TEXT DEFAULT (datetime('now')),
   FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS wallets (
+  user_id TEXT PRIMARY KEY,
+  balance REAL DEFAULT 0.0,
+  escrow_locked REAL DEFAULT 0.0,
+  total_withdrawn REAL DEFAULT 0.0,
+  updated_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS wallet_transactions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  amount REAL NOT NULL,
+  type TEXT NOT NULL, -- 'CREDIT', 'DEBIT', 'ESCROW_LOCK', 'ESCROW_RELEASE', 'PAYOUT', 'WITHDRAWAL'
+  description TEXT,
+  reference_job_id TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS receipts (
+  id TEXT PRIMARY KEY,
+  job_id TEXT NOT NULL,
+  company_user_id TEXT NOT NULL,
+  mechanic_user_id TEXT NOT NULL,
+  receipt_number TEXT UNIQUE NOT NULL,
+  base_price REAL NOT NULL,
+  parts_cost REAL DEFAULT 0.0,
+  service_fee REAL DEFAULT 0.0,
+  total_amount REAL NOT NULL,
+  payment_method TEXT DEFAULT 'ESCROW_RELEASE',
+  issued_at TEXT DEFAULT (datetime('now')),
+  notes TEXT,
+  FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
+);
 `);
 
 // Safe migrations for jobs table
@@ -249,6 +285,28 @@ try {
   db.exec("UPDATE mechanic_profiles SET is_verified = 1 WHERE user_id IN ('usr_mech_rajesh', 'usr_mech_vikram', 'usr_team_precision')");
 } catch (e) {
   // Already exists
+}
+
+// Ensure all users have a wallet
+try {
+  const allUsers = db.prepare('SELECT id, role FROM users').all();
+  for (const u of allUsers) {
+    const existing = db.prepare('SELECT user_id FROM wallets WHERE user_id = ?').get(u.id);
+    if (!existing) {
+      const initialBalance = u.role === 'company' ? 75000.0 : u.role === 'mechanic' ? 24500.0 : 0.0;
+      db.prepare(`
+        INSERT INTO wallets (user_id, balance, escrow_locked, total_withdrawn)
+        VALUES (?, ?, 0, 0)
+      `).run(u.id, initialBalance);
+
+      db.prepare(`
+        INSERT INTO wallet_transactions (id, user_id, amount, type, description)
+        VALUES (?, ?, ?, 'CREDIT', 'Opening industrial account balance')
+      `).run('tx_' + Math.random().toString(36).substring(2, 9), u.id, initialBalance);
+    }
+  }
+} catch (e) {
+  console.error('Wallet init error:', e);
 }
 
 // Seed function to populate rich demo dataset if empty
