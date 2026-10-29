@@ -1,0 +1,76 @@
+Core Concept
+
+Companies post machine breakdown jobs → Skilled mechanics/technicians apply or get auto-matched → They negotiate, agree, and the job gets done.
+
+👤 Two User Types
+
+For Companies (Job Posters)
+
+Company profile with industry type, machine types they operate
+Post a breakdown job (machine type, issue description, urgency level, location)
+Browse mechanic profiles by skill, rating, and past work
+Auto-match with nearby available mechanics based on machine type
+In-app chat to negotiate price and timeline
+Track job status in real time (on the way, working, completed)
+Rate and review mechanic after job
+Job history and invoices dashboard
+
+For Mechanics/Technicians (Service Providers)
+
+Personal profile with skills, certifications, years of experience
+Portfolio of past completed repairs (photos, descriptions, machine types)
+Set availability status (available now / busy)
+Browse and apply to nearby jobs
+Receive instant job alerts matching their skill set
+In-app chat to discuss job scope and price
+Earnings dashboard with payment history
+🔧 Key Platform Features
+
+Smart Matching
+
+Filter mechanics by machine type (CNC, hydraulics, compressors, electrical panels, etc.)
+Match by location/distance
+Match by availability (available right now vs scheduled)
+Sort by rating, experience, and completed jobs count
+
+Job Posting
+
+Quick post in under 2 minutes
+Urgency tags: Emergency, Same Day, Scheduled
+Upload photos/videos of the broken machine
+Specify machine brand, model, and issue type
+
+Negotiation & Chat
+
+Real-time in-app messaging
+Price proposal and counter-offer system
+Share documents, manuals, or images in chat
+Quote acceptance button to lock in the deal
+
+Verification & Trust
+
+Mechanic ID and certification verification
+Background check badge
+Skill test or assessment before onboarding
+Review and star rating system
+Completed jobs count shown on profile
+
+Payments
+
+Secure in-app payment after job completion
+Milestone payments for long jobs
+Platform takes a small commission per job
+Invoice auto-generated after job
+
+Notifications
+
+Push alerts for new jobs matching skills
+Alert when a company views your profile
+Job status updates for companies
+📊 Admin Panel Features
+Approve/reject mechanic registrations
+Manage disputes between company and mechanic
+View platform revenue and commissions
+Monitor active jobs on a map
+Ban or flag fraudulent accounts
+Analytics: jobs posted, completed, revenue, top mechanics

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Upload, AlertTriangle, Cpu, MapPin, Navigation, Map as MapIcon } from 'lucide-react';
+import { X, Upload, AlertTriangle, MapPin, Navigation, CheckCircle2 } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { api } from '../services/api';
@@ -17,13 +17,129 @@ const MACHINE_CATEGORIES = [
   'Packaging & Bottling Machinery'
 ];
 
-const PRESET_ZONES = [
-  { name: 'Plot 42, Bhosari MIDC, Pune', lat: 18.6276, lng: 73.8447, city: 'Pune' },
-  { name: 'Phase II, Chakan Industrial Hub, Pune', lat: 18.7597, lng: 73.8183, city: 'Pune' },
-  { name: 'Unit 4, Bhiwandi Logistics Park, Mumbai', lat: 19.2967, lng: 73.0631, city: 'Mumbai' },
-  { name: 'Plot 18, Ambattur Industrial Estate, Chennai', lat: 13.0882, lng: 80.1609, city: 'Chennai' },
-  { name: 'Peenya Industrial Area, Bangalore', lat: 13.0285, lng: 77.5195, city: 'Bangalore' }
-];
+// Small Interactive Map Component for picking machine location
+function SmallMapLocationPicker({ lat, lng, onLocationChange }) {
+  const mapRef = useRef(null);
+  const mapInstance = useRef(null);
+  const markerInstance = useRef(null);
+  const [locating, setLocating] = useState(false);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    if (!mapInstance.current) {
+      if (mapRef.current._leaflet_id) {
+        delete mapRef.current._leaflet_id;
+      }
+
+      const map = L.map(mapRef.current, {
+        center: [lat || 18.6276, lng || 73.8447],
+        zoom: 13,
+        zoomControl: true
+      });
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19
+      }).addTo(map);
+
+      const pinIcon = L.divIcon({
+        className: 'custom-picker-marker',
+        html: `
+          <div style="background-color: #0F172A; width: 30px; height: 30px; border-radius: 50%; border: 3px solid #22C55E; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.35); color: white; font-weight: 700; font-size: 10px;">
+            PIN
+          </div>
+        `,
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
+      });
+
+      const marker = L.marker([lat || 18.6276, lng || 73.8447], {
+        draggable: true,
+        icon: pinIcon
+      }).addTo(map);
+
+      marker.on('dragend', (e) => {
+        const { lat: newLat, lng: newLng } = e.target.getLatLng();
+        onLocationChange(parseFloat(newLat.toFixed(5)), parseFloat(newLng.toFixed(5)));
+      });
+
+      map.on('click', (e) => {
+        const { lat: newLat, lng: newLng } = e.latlng;
+        marker.setLatLng([newLat, newLng]);
+        onLocationChange(parseFloat(newLat.toFixed(5)), parseFloat(newLng.toFixed(5)));
+      });
+
+      mapInstance.current = map;
+      markerInstance.current = marker;
+
+      // Invalidate size after modal renders to ensure full tiles render
+      setTimeout(() => {
+        try { map.invalidateSize(); } catch (err) {}
+      }, 250);
+    } else {
+      if (markerInstance.current) {
+        markerInstance.current.setLatLng([lat, lng]);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (mapInstance.current) {
+        try { mapInstance.current.remove(); } catch (e) {}
+        mapInstance.current = null;
+      }
+    };
+  }, []);
+
+  const handleLocateMe = (e) => {
+    e.preventDefault();
+    if (!navigator.geolocation) return;
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocating(false);
+        const newLat = parseFloat(pos.coords.latitude.toFixed(5));
+        const newLng = parseFloat(pos.coords.longitude.toFixed(5));
+        if (mapInstance.current && markerInstance.current) {
+          mapInstance.current.flyTo([newLat, newLng], 14, { duration: 1 });
+          markerInstance.current.setLatLng([newLat, newLng]);
+        }
+        onLocationChange(newLat, newLng);
+      },
+      () => setLocating(false),
+      { enableHighAccuracy: true, timeout: 6000 }
+    );
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-xs">
+        <label className="font-semibold text-slate-800 flex items-center gap-1.5">
+          <MapPin className="w-3.5 h-3.5 text-slate-700" />
+          <span>Machine Plant Location (Pin on Map)</span>
+        </label>
+        <button
+          type="button"
+          onClick={handleLocateMe}
+          disabled={locating}
+          className="text-[11px] font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 px-2.5 py-1 rounded-md flex items-center gap-1 cursor-pointer transition"
+        >
+          <Navigation className={`w-3 h-3 ${locating ? 'animate-spin text-sky-600' : 'text-slate-600'}`} />
+          <span>{locating ? 'Locating...' : 'Locate Me'}</span>
+        </button>
+      </div>
+
+      <div className="relative w-full h-44 rounded-lg overflow-hidden border border-slate-200 bg-slate-100 shadow-inner">
+        <div ref={mapRef} className="w-full h-full z-0" />
+        <div className="absolute bottom-2 left-2 z-[400] bg-white/95 backdrop-blur-xs text-[10px] font-mono text-slate-800 px-2.5 py-1 rounded shadow-xs border border-slate-200">
+          Lat: {lat}, Lng: {lng} &bull; Click or drag pin to position
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function PostJobModal({ isOpen, onClose, currentUser, mechanics = [], onJobCreated }) {
   const [formData, setFormData] = useState({
@@ -38,108 +154,30 @@ export default function PostJobModal({ isOpen, onClose, currentUser, mechanics =
     production_impact: 'TOTAL_STOPPAGE',
     error_code: '',
     hiring_mode: 'BIDDING', // 'BIDDING' or 'DIRECT'
-    direct_assigned_mechanic_id: mechanics[0]?.user_id || '',
     fault_description: '',
     urgency: 'EMERGENCY',
-    address: PRESET_ZONES[0].name,
-    city: PRESET_ZONES[0].city,
-    lat: PRESET_ZONES[0].lat,
-    lng: PRESET_ZONES[0].lng,
+    address: 'Plot 42, Bhosari MIDC, Pune',
+    city: 'Pune',
+    lat: 18.6276,
+    lng: 73.8447,
     budget_min: '6000',
     budget_max: '12000',
     images: []
   });
 
-  const [showMapPicker, setShowMapPicker] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
-  const mapContainerRef = useRef(null);
-  const leafletMapRef = useRef(null);
-  const markerRef = useRef(null);
-
-  useEffect(() => {
-    if (showMapPicker && mapContainerRef.current && !leafletMapRef.current) {
-      const map = L.map(mapContainerRef.current, {
-        center: [formData.lat || 18.6276, formData.lng || 73.8447],
-        zoom: 13
-      });
-
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
-
-      const marker = L.marker([formData.lat || 18.6276, formData.lng || 73.8447], { draggable: true }).addTo(map);
-      markerRef.current = marker;
-
-      marker.on('dragend', (e) => {
-        const { lat, lng } = e.target.getLatLng();
-        setFormData(prev => ({
-          ...prev,
-          lat: parseFloat(lat.toFixed(6)),
-          lng: parseFloat(lng.toFixed(6)),
-          address: `Pinned Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`
-        }));
-      });
-
-      map.on('click', (e) => {
-        const { lat, lng } = e.latlng;
-        marker.setLatLng([lat, lng]);
-        setFormData(prev => ({
-          ...prev,
-          lat: parseFloat(lat.toFixed(6)),
-          lng: parseFloat(lng.toFixed(6)),
-          address: `Pinned Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`
-        }));
-      });
-
-      leafletMapRef.current = map;
-    }
-  }, [showMapPicker]);
-
   if (!isOpen) return null;
 
-  const handleLocateMe = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const lat = parseFloat(pos.coords.latitude.toFixed(6));
-          const lng = parseFloat(pos.coords.longitude.toFixed(6));
-          setFormData(prev => ({
-            ...prev,
-            lat,
-            lng,
-            address: `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`
-          }));
-          if (leafletMapRef.current) {
-            leafletMapRef.current.setView([lat, lng], 14);
-            if (markerRef.current) markerRef.current.setLatLng([lat, lng]);
-          }
-        },
-        (err) => {
-          console.warn('Geolocation unavailable:', err);
-          setError('Unable to retrieve current location.');
-        }
-      );
-    }
-  };
-
-  const handleZoneSelect = (e) => {
-    const selected = PRESET_ZONES.find(z => z.name === e.target.value);
-    if (selected) {
-      setFormData(prev => ({
-        ...prev,
-        address: selected.name,
-        city: selected.city,
-        lat: selected.lat,
-        lng: selected.lng
-      }));
-      if (leafletMapRef.current) {
-        leafletMapRef.current.setView([selected.lat, selected.lng], 13);
-        if (markerRef.current) markerRef.current.setLatLng([selected.lat, selected.lng]);
-      }
-    }
+  const handleLocationChange = (newLat, newLng) => {
+    setFormData(prev => ({
+      ...prev,
+      lat: newLat,
+      lng: newLng,
+      address: `Industrial Sector (${newLat.toFixed(4)}, ${newLng.toFixed(4)})`
+    }));
   };
 
   const handleFileUpload = async (e) => {
@@ -150,8 +188,9 @@ export default function PostJobModal({ isOpen, onClose, currentUser, mechanics =
     setError(null);
     try {
       const uploadedUrls = [];
+      const uid = currentUser?.id || 'usr_company_1';
       for (const file of files) {
-        const res = await api.uploadFile(file, currentUser.id, 'job');
+        const res = await api.uploadFile(file, uid, 'job');
         if (res.url) {
           uploadedUrls.push(res.url);
         }
@@ -161,7 +200,7 @@ export default function PostJobModal({ isOpen, onClose, currentUser, mechanics =
         images: [...prev.images, ...uploadedUrls]
       }));
     } catch (err) {
-      setError('Failed to upload image');
+      setError('Failed to upload image. Please try again.');
     } finally {
       setUploading(false);
     }
@@ -181,8 +220,8 @@ export default function PostJobModal({ isOpen, onClose, currentUser, mechanics =
 
     try {
       const payload = {
-        company_user_id: currentUser.id,
-        title: formData.title || `${formData.machine_brand || ''} ${formData.machine_model || 'Machinery'} Repair`,
+        company_user_id: currentUser?.id || 'usr_company_1',
+        title: formData.title.trim() || `${formData.machine_brand || ''} ${formData.machine_model || formData.machine_category} Repair`.trim(),
         machine_category: formData.machine_category,
         machine_brand: formData.machine_brand,
         machine_model: formData.machine_model,
@@ -193,28 +232,30 @@ export default function PostJobModal({ isOpen, onClose, currentUser, mechanics =
         production_impact: formData.production_impact,
         error_code: formData.error_code,
         hiring_mode: formData.hiring_mode,
-        direct_assigned_mechanic_id: formData.hiring_mode === 'DIRECT' ? (formData.direct_assigned_mechanic_id || mechanics[0]?.user_id) : null,
-        fault_description: formData.fault_description,
+        direct_assigned_mechanic_id: null, // First technician to claim will receive direct work
+        fault_description: formData.fault_description.trim() || 'Machinery inspection, diagnostics and breakdown repair required.',
         urgency: formData.urgency,
-        address: formData.address,
-        city: formData.city,
+        address: formData.address || `Industrial Plant (${formData.lat}, ${formData.lng})`,
+        city: formData.city || 'Pune',
         lat: formData.lat,
         lng: formData.lng,
         budget_min: parseFloat(formData.budget_min) || 5000,
-        budget_max: parseFloat(formData.budget_max) || 12000,
+        budget_max: formData.hiring_mode === 'DIRECT' ? (parseFloat(formData.budget_min) || 5000) : (parseFloat(formData.budget_max) || 12000),
         images: formData.images
       };
 
       const res = await api.createJob(payload);
-      if (res.error) {
+      if (res && res.error) {
         setError(res.error);
-      } else {
+      } else if (res && res.jobId) {
         onJobCreated(res.jobId);
         onClose();
+      } else {
+        setError('Server returned an unexpected response. Please try again.');
       }
     } catch (err) {
       console.error(err);
-      setError('Failed to create job listing');
+      setError('Failed to list machine breakdown: ' + (err.message || 'Check server connection.'));
     } finally {
       setSubmitting(false);
     }
@@ -228,7 +269,7 @@ export default function PostJobModal({ isOpen, onClose, currentUser, mechanics =
         <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 flex-shrink-0">
           <div>
             <h3 className="font-bold text-slate-900 text-sm">List Machine Breakdown</h3>
-            <div className="text-[11px] text-slate-500">Specify machinery details, hiring system, and facility coordinates</div>
+            <div className="text-[11px] text-slate-500">Provide machine specs, hiring preference, and pin location</div>
           </div>
           <button
             onClick={onClose}
@@ -239,7 +280,7 @@ export default function PostJobModal({ isOpen, onClose, currentUser, mechanics =
         </div>
 
         {error && (
-          <div className="mx-5 mt-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-xs font-medium flex items-center gap-2">
+          <div className="mx-5 mt-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs font-medium flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 flex-shrink-0" />
             <span>{error}</span>
           </div>
@@ -257,12 +298,12 @@ export default function PostJobModal({ isOpen, onClose, currentUser, mechanics =
                 className={`p-3 rounded-lg border text-left transition cursor-pointer ${
                   formData.hiring_mode === 'BIDDING'
                     ? 'bg-slate-900 text-white border-slate-900'
-                    : 'bg-white text-slate-700 border-slate-200'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                 }`}
               >
                 <div className="font-semibold text-xs mb-0.5">Open Bidding</div>
                 <div className={`text-[11px] ${formData.hiring_mode === 'BIDDING' ? 'text-slate-300' : 'text-slate-500'}`}>
-                  Technicians submit competitive quotes.
+                  Multiple technicians submit competitive quotes. You review and select.
                 </div>
               </button>
 
@@ -272,30 +313,25 @@ export default function PostJobModal({ isOpen, onClose, currentUser, mechanics =
                 className={`p-3 rounded-lg border text-left transition cursor-pointer ${
                   formData.hiring_mode === 'DIRECT'
                     ? 'bg-slate-900 text-white border-slate-900'
-                    : 'bg-white text-slate-700 border-slate-200'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                 }`}
               >
                 <div className="font-semibold text-xs mb-0.5">Direct Hire</div>
                 <div className={`text-[11px] ${formData.hiring_mode === 'DIRECT' ? 'text-slate-300' : 'text-slate-500'}`}>
-                  Instant 1-click booking of a selected specialist.
+                  Instant assignment: First certified technician to apply is automatically given the job.
                 </div>
               </button>
             </div>
 
             {formData.hiring_mode === 'DIRECT' && (
-              <div className="mt-2.5">
-                <label className="block text-xs font-medium text-slate-700 mb-1">Select Technician for Direct Hire</label>
-                <select
-                  value={formData.direct_assigned_mechanic_id}
-                  onChange={(e) => setFormData({ ...formData, direct_assigned_mechanic_id: e.target.value })}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900"
-                >
-                  {mechanics.map((m) => (
-                    <option key={m.user_id} value={m.user_id}>
-                      {m.full_name} &bull; Rating {m.rating} &bull; ₹{m.hourly_rate}/hr
-                    </option>
-                  ))}
-                </select>
+              <div className="mt-2.5 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>Urban Company Style Instant Booking</span>
+                </div>
+                <div className="text-[11px] text-emerald-700">
+                  You specify the fixed payout below. The first verified technician who claims this work order will be instantly assigned and dispatched without bidding delays.
+                </div>
               </div>
             )}
           </div>
@@ -424,63 +460,18 @@ export default function PostJobModal({ isOpen, onClose, currentUser, mechanics =
             </div>
           </div>
 
-          {/* Fault Description & Location Selection */}
+          {/* Fault Description & Error Code */}
           <div className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Alarm / Error Code</label>
-                <input
-                  type="text"
-                  placeholder="e.g. E-402"
-                  value={formData.error_code}
-                  onChange={(e) => setFormData({ ...formData, error_code: e.target.value })}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-medium text-slate-700">Location & Facility</label>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleLocateMe}
-                      className="text-[11px] text-slate-600 hover:text-slate-900 font-semibold flex items-center gap-1 cursor-pointer"
-                    >
-                      <Navigation className="w-3 h-3 text-slate-700" />
-                      <span>Locate Me</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowMapPicker(!showMapPicker)}
-                      className="text-[11px] text-slate-600 hover:text-slate-900 font-semibold flex items-center gap-1 cursor-pointer"
-                    >
-                      <MapIcon className="w-3 h-3 text-slate-700" />
-                      <span>{showMapPicker ? 'Hide Map' : 'Select on Map'}</span>
-                    </button>
-                  </div>
-                </div>
-
-                <select
-                  onChange={handleZoneSelect}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900"
-                >
-                  {PRESET_ZONES.map((zone) => (
-                    <option key={zone.name} value={zone.name}>{zone.name}</option>
-                  ))}
-                </select>
-              </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Alarm / Error Code</label>
+              <input
+                type="text"
+                placeholder="e.g. E-402 Spindle Inverter Fault"
+                value={formData.error_code}
+                onChange={(e) => setFormData({ ...formData, error_code: e.target.value })}
+                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900"
+              />
             </div>
-
-            {/* Map Location Picker */}
-            {showMapPicker && (
-              <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5">
-                <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
-                  <span>Click anywhere on the map or drag pin to choose coordinates</span>
-                  <span>Lat: {formData.lat}, Lng: {formData.lng}</span>
-                </div>
-                <div ref={mapContainerRef} className="w-full h-44 rounded border border-slate-200" />
-              </div>
-            )}
 
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Fault Description</label>
@@ -495,74 +486,108 @@ export default function PostJobModal({ isOpen, onClose, currentUser, mechanics =
             </div>
           </div>
 
+          {/* Machine Location Map Picker (Replaced dropdown) */}
+          <SmallMapLocationPicker
+            lat={formData.lat}
+            lng={formData.lng}
+            onLocationChange={handleLocationChange}
+          />
+
           {/* Photo Upload */}
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Attach Photos</label>
-            <div className="flex flex-wrap items-center gap-2">
-              {formData.images.map((imgUrl, i) => (
-                <div key={i} className="relative w-14 h-14 rounded-lg overflow-hidden border border-slate-200 group">
-                  <img src={imgUrl} className="w-full h-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => removeImage(i)}
-                    className="absolute inset-0 bg-slate-900/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-
-              <label className="w-14 h-14 rounded-lg border border-dashed border-slate-300 hover:border-slate-500 flex flex-col items-center justify-center text-slate-400 hover:text-slate-700 cursor-pointer transition bg-slate-50">
-                <Upload className="w-4 h-4 mb-0.5" />
-                <span className="text-[9px] font-mono">{uploading ? '...' : '+ Upload'}</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleFileUpload}
-                  disabled={uploading}
-                  className="hidden"
-                />
+            <label className="block text-xs font-medium text-slate-700 mb-1">Attach Machinery Photos / Error Logs</label>
+            <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center hover:border-slate-400 transition bg-slate-50/50">
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={handleFileUpload}
+                id="modal-job-photo-upload"
+                className="hidden"
+                disabled={uploading}
+              />
+              <label
+                htmlFor="modal-job-photo-upload"
+                className="cursor-pointer flex flex-col items-center justify-center gap-1.5"
+              >
+                <Upload className="w-5 h-5 text-slate-500" />
+                <span className="text-xs font-semibold text-slate-800">
+                  {uploading ? 'Uploading media...' : 'Upload Machine Photos'}
+                </span>
+                <span className="text-[10px] text-slate-500">JPG, PNG up to 10MB</span>
               </label>
             </div>
+
+            {formData.images.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2.5">
+                {formData.images.map((img, idx) => (
+                  <div key={idx} className="relative w-16 h-16 rounded-lg overflow-hidden border border-slate-200 group">
+                    <img src={img} alt="Machine" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(idx)}
+                      className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Budget */}
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Budget Range (₹)</label>
-            <div className="grid grid-cols-2 gap-2">
+          {formData.hiring_mode === 'DIRECT' ? (
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Fixed Service Payout (₹)</label>
               <input
                 type="number"
-                placeholder="Min Budget"
+                placeholder="e.g. 6500"
                 value={formData.budget_min}
-                onChange={(e) => setFormData({ ...formData, budget_min: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, budget_min: e.target.value, budget_max: e.target.value })}
+                required
                 className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900"
               />
-              <input
-                type="number"
-                placeholder="Max Budget"
-                value={formData.budget_max}
-                onChange={(e) => setFormData({ ...formData, budget_max: e.target.value })}
-                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900"
-              />
+              <div className="text-[10px] text-slate-500 mt-1">This exact fixed amount will be paid into escrow upon assignment.</div>
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Min Budget (₹)</label>
+                <input
+                  type="number"
+                  value={formData.budget_min}
+                  onChange={(e) => setFormData({ ...formData, budget_min: e.target.value })}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Max Budget (₹)</label>
+                <input
+                  type="number"
+                  value={formData.budget_max}
+                  onChange={(e) => setFormData({ ...formData, budget_max: e.target.value })}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900"
+                />
+              </div>
+            </div>
+          )}
 
-          {/* Footer Submit */}
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2 flex-shrink-0">
+          {/* Action Footer */}
+          <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={onClose}
-              className="px-3.5 py-2 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900"
+              className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50 transition cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={submitting || uploading}
-              className="bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs px-5 py-2 rounded-lg transition cursor-pointer disabled:opacity-50"
+              disabled={submitting}
+              className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 disabled:opacity-60"
             >
-              {submitting ? 'Submitting...' : formData.hiring_mode === 'DIRECT' ? 'Confirm Direct Hire' : 'Broadcast Listing'}
+              <span>{submitting ? 'Publishing Breakdown...' : 'List Machine Breakdown'}</span>
             </button>
           </div>
 

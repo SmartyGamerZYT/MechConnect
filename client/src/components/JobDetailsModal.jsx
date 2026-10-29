@@ -91,6 +91,35 @@ export default function JobDetailsModal({
   const isAssigned = ['ASSIGNED', 'ON_THE_WAY', 'WORKING', 'COMPLETED'].includes(job?.status);
   const isCompleted = job?.status === 'COMPLETED';
 
+  // Claim Direct Hire Job
+  const handleClaimDirect = async () => {
+    if (!isVerified) {
+      setBidError('Your account is awaiting admin verification.');
+      return;
+    }
+    const fixedRate = job.budget_min || job.budget_max || 5000;
+    setSubmittingProposal(true);
+    setBidError(null);
+    try {
+      const res = await api.applyToJob(job.id, {
+        mechanic_user_id: currentUser.id,
+        proposed_price: fixedRate,
+        estimated_arrival: arrivalEta || '25 mins',
+        message: 'Direct hire accepted. Rapid dispatch initialized.'
+      });
+      if (res.error) {
+        setBidError(res.error);
+      } else {
+        fetchDetails();
+        if (onRefreshData) onRefreshData();
+      }
+    } catch (err) {
+      setBidError('Failed to claim direct work order.');
+    } finally {
+      setSubmittingProposal(false);
+    }
+  };
+
   // Apply to Job
   const handleApply = async (e) => {
     e.preventDefault();
@@ -367,62 +396,94 @@ export default function JobDetailsModal({
                                                                       </div>
                                                                     )}
 
-                                                                    {/* Technician Bid Form */}
+                                                                    {/* Technician Bid Form / Direct Grab */}
                                                                     {isMechanic && !proposals.some(p => p.mechanic_user_id === currentUser.id) && (
-                                                                            <form onSubmit={handleApply} className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2.5">
-                                                                              <div className="text-xs font-semibold text-slate-900">Submit Bid</div>
+                                                                      job?.hiring_mode === 'DIRECT' ? (
+                                                                        <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-lg space-y-2.5">
+                                                                          <div className="flex items-center justify-between">
+                                                                            <span className="font-bold text-xs text-emerald-900 flex items-center gap-1.5">
+                                                                              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                                                              Direct Hire Order (Instant Grab)
+                                                                            </span>
+                                                                            <span className="font-mono font-bold text-slate-900 text-sm">
+                                                                              ₹{job.budget_min ? job.budget_min.toLocaleString() : 'Fixed Rate'}
+                                                                            </span>
+                                                                          </div>
+                                                                          <p className="text-xs text-emerald-800">
+                                                                            This machine breakdown is listed for Direct Hire. The first certified technician to claim it is immediately assigned at the fixed payout.
+                                                                          </p>
+                                                                          {!isVerified ? (
+                                                                            <div className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded border border-amber-200">
+                                                                              Account verification pending. Admin must verify your credentials before you can claim work orders.
+                                                                            </div>
+                                                                          ) : (
+                                                                            <button
+                                                                              type="button"
+                                                                              onClick={handleClaimDirect}
+                                                                              disabled={submittingProposal}
+                                                                              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs py-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
+                                                                            >
+                                                                              <CheckCircle2 className="w-4 h-4" />
+                                                                              <span>{submittingProposal ? 'Claiming Work Order...' : `Claim & Accept Work Order (₹${job.budget_min ? job.budget_min.toLocaleString() : 'Fixed'})`}</span>
+                                                                            </button>
+                                                                          )}
+                                                                        </div>
+                                                                      ) : (
+                                                                        <form onSubmit={handleApply} className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2.5">
+                                                                          <div className="text-xs font-semibold text-slate-900">Submit Bid</div>
 
-                                                                              {!isVerified ? (
-                                                                                <div className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded border border-amber-200">
-                                                                                  Account verification pending. Admin must verify your credentials before you can submit bids.
-                                                                                </div>
-                                                                              ) : (
-                                                                                <>
-                                                                                  <div className="grid grid-cols-2 gap-2">
-                                                                                    <div>
-                                                                                      <label className="block text-[10px] font-medium text-slate-600 mb-1">Proposed Price (₹)</label>
-                                                                                      <input
-                                                                                        type="number"
-                                                                                        placeholder="e.g. 7500"
-                                                                                        value={proposedPrice}
-                                                                                        onChange={(e) => setProposedPrice(e.target.value)}
-                                                                                        required
-                                                                                        className="w-full bg-white border border-slate-200 rounded px-2.5 py-1 text-xs text-slate-900"
-                                                                                      />
-                                                                                    </div>
-                                                                                    <div>
-                                                                                      <label className="block text-[10px] font-medium text-slate-600 mb-1">ETA</label>
-                                                                                      <select
-                                                                                        value={arrivalEta}
-                                                                                        onChange={(e) => setArrivalEta(e.target.value)}
-                                                                                        className="w-full bg-white border border-slate-200 rounded px-2.5 py-1 text-xs text-slate-900"
-                                                                                      >
-                                                                                        <option value="20 mins">Within 20 mins</option>
-                                                                                        <option value="35 mins">Within 35 mins</option>
-                                                                                        <option value="1 hour">Within 1 hour</option>
-                                                                                      </select>
-                                                                                    </div>
-                                                                                  </div>
-
+                                                                          {!isVerified ? (
+                                                                            <div className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded border border-amber-200">
+                                                                              Account verification pending. Admin must verify your credentials before you can submit bids.
+                                                                            </div>
+                                                                          ) : (
+                                                                            <>
+                                                                              <div className="grid grid-cols-2 gap-2">
+                                                                                <div>
+                                                                                  <label className="block text-[10px] font-medium text-slate-600 mb-1">Proposed Price (₹)</label>
                                                                                   <input
-                                                                                    type="text"
-                                                                                    placeholder="Note (optional)"
-                                                                                    value={proposalMsg}
-                                                                                    onChange={(e) => setProposalMsg(e.target.value)}
+                                                                                    type="number"
+                                                                                    placeholder="e.g. 7500"
+                                                                                    value={proposedPrice}
+                                                                                    onChange={(e) => setProposedPrice(e.target.value)}
+                                                                                    required
                                                                                     className="w-full bg-white border border-slate-200 rounded px-2.5 py-1 text-xs text-slate-900"
                                                                                   />
+                                                                                </div>
+                                                                                <div>
+                                                                                  <label className="block text-[10px] font-medium text-slate-600 mb-1">ETA</label>
+                                                                                  <select
+                                                                                    value={arrivalEta}
+                                                                                    onChange={(e) => setArrivalEta(e.target.value)}
+                                                                                    className="w-full bg-white border border-slate-200 rounded px-2.5 py-1 text-xs text-slate-900"
+                                                                                  >
+                                                                                    <option value="20 mins">Within 20 mins</option>
+                                                                                    <option value="35 mins">Within 35 mins</option>
+                                                                                    <option value="1 hour">Within 1 hour</option>
+                                                                                  </select>
+                                                                                </div>
+                                                                              </div>
 
-                        <button
-                                                                                  type="submit"
-                                                                                  disabled={submittingProposal}
-                                                                                  className="bg-slate-900 text-white font-semibold text-xs px-4 py-1.5 rounded-md"
-                                                                                >
-                                                                          {submittingProposal ? 'Submitting...' : 'Submit Bid'}
-                                                                        </button>
-                                                                      </>
+                                                                              <input
+                                                                                type="text"
+                                                                                placeholder="Note (optional)"
+                                                                                value={proposalMsg}
+                                                                                onChange={(e) => setProposalMsg(e.target.value)}
+                                                                                className="w-full bg-white border border-slate-200 rounded px-2.5 py-1 text-xs text-slate-900"
+                                                                              />
+
+                                                                              <button
+                                                                                type="submit"
+                                                                                disabled={submittingProposal}
+                                                                                className="bg-slate-900 text-white font-semibold text-xs px-4 py-1.5 rounded-md hover:bg-slate-800 transition cursor-pointer"
+                                                                              >
+                                                                                {submittingProposal ? 'Submitting...' : 'Submit Bid'}
+                                                                              </button>
+                                                                            </>
+                                                                          )}
+                                                                        </form>
+                                                                      )
                                                                     )}
-                                                                  </form>
-                )}
 
                                                                     {/* Proposals list */}
                                                                     <div className="space-y-2">

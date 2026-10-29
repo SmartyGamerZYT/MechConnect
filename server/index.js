@@ -148,6 +148,10 @@ app.post('/api/auth/login', (req, res) => {
       return res.status(404).json({ error: 'No account found with this email. Please register.' });
     }
 
+    if (user.is_banned === 1) {
+      return res.status(403).json({ error: 'This account has been suspended by platform administration.' });
+    }
+
     res.json({ success: true, user });
   } catch (err) {
     console.error('Login error:', err);
@@ -385,17 +389,36 @@ app.post('/api/jobs', (req, res) => {
       images
     } = req.body;
 
-    if (!company_user_id || !title || !machine_category || !fault_description || !urgency || !address) {
-      return res.status(400).json({ error: 'Missing required breakdown information' });
+    let resolvedCompanyUserId = company_user_id;
+    if (!resolvedCompanyUserId || !db.prepare('SELECT id FROM users WHERE id = ?').get(resolvedCompanyUserId)) {
+      const defaultComp = db.prepare("SELECT id FROM users WHERE role = 'company' LIMIT 1").get();
+      resolvedCompanyUserId = defaultComp ? defaultComp.id : 'usr_comp_apex';
     }
 
-    const count = db.prepare('SELECT COUNT(*) as count FROM jobs').get().count;
-    const jobId = `MC-2026-${String(count + 105).padStart(4, '0')}`;
+    const safeCategory = machine_category || 'CNC Machines (Lathe, Milling, Turning, 5-Axis)';
+    const safeTitle = (title && title.trim()) ? title.trim() : `${machine_brand || ''} ${machine_model || safeCategory || 'Machinery'} Repair`.trim();
+    const safeFault = (fault_description && fault_description.trim()) ? fault_description.trim() : 'Machine breakdown inspection, diagnostics and repair required.';
+    const safeAddress = (address && address.trim()) ? address.trim() : 'Industrial MIDC Zone';
+    const safeUrgency = urgency || 'EMERGENCY';
+
+    // Compute guaranteed non-colliding unique Job ID
+    let nextNum = 125;
+    const allJobs = db.prepare('SELECT id FROM jobs').all();
+    allJobs.forEach(j => {
+      const match = j.id.match(/\d+$/);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        if (!isNaN(num) && num >= nextNum) {
+          nextNum = num + 1;
+        }
+      }
+    });
+    const jobId = `MC-2026-${String(nextNum).padStart(4, '0')}`;
 
     const parsedImages = Array.isArray(images) ? JSON.stringify(images) : '[]';
-    const isDirectHire = hiring_mode === 'DIRECT' && direct_assigned_mechanic_id;
-    const initialStatus = isDirectHire ? 'ASSIGNED' : 'OPEN';
-    const fixedAgreedPrice = isDirectHire ? (parseFloat(budget_min) || 4500) : null;
+    const isDirectPreassigned = Boolean(hiring_mode === 'DIRECT' && direct_assigned_mechanic_id);
+    const initialStatus = isDirectPreassigned ? 'ASSIGNED' : 'OPEN';
+    const fixedAgreedPrice = isDirectPreassigned ? (parseFloat(budget_min) || 4500) : null;
 
     db.prepare(`
       INSERT INTO jobs(
@@ -407,9 +430,9 @@ app.post('/api/jobs', (req, res) => {
   ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
     `).run(
       jobId,
-      company_user_id,
-      title,
-      machine_category,
+      resolvedCompanyUserId,
+      safeTitle,
+      safeCategory,
       machine_brand || '',
       machine_model || '',
       serial_number || '',
@@ -420,14 +443,14 @@ app.post('/api/jobs', (req, res) => {
       error_code || '',
       hiring_mode || 'BIDDING',
       direct_assigned_mechanic_id || null,
-      isDirectHire ? direct_assigned_mechanic_id : null,
+      isDirectPreassigned ? direct_assigned_mechanic_id : null,
       fixedAgreedPrice,
-      fault_description,
-      urgency,
+      safeFault,
+      safeUrgency,
       initialStatus,
       parseFloat(lat) || 18.6276,
       parseFloat(lng) || 73.8447,
-      address,
+      safeAddress,
       city || 'Pune',
       parseFloat(budget_min) || null,
       parseFloat(budget_max) || null,
@@ -443,38 +466,40 @@ VALUES(?, ?, ?, ?, ?)
       'jh_' + Date.now(),
       jobId,
       initialStatus,
-      isDirectHire 
-        ? `Direct Hire(Urban Company style) dispatched to technician.Job assigned at ₹${ fixedAgreedPrice }.`
-        : `Breakdown job created under ${ urgency } protocol(${ hiring_mode || 'BIDDING'}).Open for technician bids.`,
-      company_user_id
+      isDirectPreassigned 
+        ? `Direct Hire dispatched to technician. Job assigned at ₹${fixedAgreedPrice}.`
+        : hiring_mode === 'DIRECT'
+        ? `Direct Hire (Urban Company style) job listed at fixed rate ₹${parseFloat(budget_min) || 5000}. First technician to claim will be instantly assigned.`
+        : `Breakdown job created under ${safeUrgency} protocol (${hiring_mode || 'BIDDING'}). Open for technician bids.`,
+      resolvedCompanyUserId
     );
 
-    // If Direct Hire, create locked Quote Card immediately
-    if (isDirectHire) {
+    // If Direct Hire with preassigned mechanic, create locked Quote Card immediately
+    if (isDirectPreassigned) {
       const quoteId = 'qc_' + Date.now();
       db.prepare(`
         INSERT INTO quote_cards(
-  id, job_id, company_user_id, mechanic_user_id,
-  agreed_price, scope_summary, agreed_start_time, company_confirmed_at, mechanic_confirmed_at, is_locked
-) VALUES(?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'), 1)
+          id, job_id, company_user_id, mechanic_user_id,
+          agreed_price, scope_summary, agreed_start_time, company_confirmed_at, mechanic_confirmed_at, is_locked
+        ) VALUES(?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'), 1)
       `).run(
         quoteId,
         jobId,
-        company_user_id,
+        resolvedCompanyUserId,
         direct_assigned_mechanic_id,
         fixedAgreedPrice,
-        `Direct Urban - Company style booking for ${ title }.Technician dispatched under ${ urgency } SLA.`
+        `Direct booking for ${safeTitle}. Technician dispatched under ${safeUrgency} SLA.`
       );
 
       // Add system message in chat
       db.prepare(`
         INSERT INTO messages(id, job_id, sender_user_id, sender_role, message_text, is_quote_card, quote_card_id)
-VALUES(?, ?, ?, 'system', ?, 1, ?)
-  `).run(
+        VALUES(?, ?, ?, 'system', ?, 1, ?)
+      `).run(
         'msg_' + Date.now(),
         jobId,
-        company_user_id,
-        `[DIRECT DISPATCH LOCKED] Direct hire confirmed at ₹${ fixedAgreedPrice }. Technician assigned under ${ urgency } protocol.`,
+        resolvedCompanyUserId,
+        `[DIRECT DISPATCH LOCKED] Direct hire confirmed at ₹${fixedAgreedPrice}. Technician assigned under ${safeUrgency} protocol.`,
         quoteId
       );
     }
@@ -482,14 +507,14 @@ VALUES(?, ?, ?, 'system', ?, 1, ?)
     // Broadcast new job to all connected sockets
     io.emit('new_job_posted', {
       jobId,
-      title,
-      urgency,
-      machine_category,
+      title: safeTitle,
+      urgency: safeUrgency,
+      machine_category: safeCategory,
       hiring_mode: hiring_mode || 'BIDDING',
-      city
+      city: city || 'Pune'
     });
 
-    res.json({ success: true, jobId, isDirectHire });
+    res.json({ success: true, jobId, isDirectPreassigned });
   } catch (err) {
     console.error('Error creating job:', err);
     res.status(500).json({ error: 'Failed to post job' });
@@ -514,11 +539,93 @@ app.post('/api/jobs/:id/apply', (req, res) => {
       });
     }
 
+    const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(jobId);
+    if (!job) {
+      return res.status(404).json({ error: 'Breakdown listing not found' });
+    }
+
+    if (job.status !== 'OPEN') {
+      return res.status(400).json({ error: 'This breakdown work is no longer open for assignment.' });
+    }
+
+    // Direct Hire (Urban Company style): First technician to apply is INSTANTLY assigned!
+    if (job.hiring_mode === 'DIRECT') {
+      const fixedPrice = parseFloat(proposed_price) || job.budget_min || job.budget_max || 5000;
+
+      db.prepare(`
+        UPDATE jobs
+        SET status = 'ASSIGNED',
+            assigned_mechanic_user_id = ?,
+            agreed_price = ?,
+            updated_at = datetime('now')
+        WHERE id = ?
+      `).run(mechanic_user_id, fixedPrice, jobId);
+
+      const proposalId = 'prop_' + Date.now();
+      db.prepare(`
+        INSERT INTO proposals (id, job_id, mechanic_user_id, proposed_price, estimated_arrival, message, status, counter_round)
+        VALUES (?, ?, ?, ?, ?, ?, 'ACCEPTED', 0)
+      `).run(
+        proposalId,
+        jobId,
+        mechanic_user_id,
+        fixedPrice,
+        estimated_arrival || '25 mins',
+        message || 'Direct hire accepted. Rapid dispatch initialized.'
+      );
+
+      // Create locked Quote Card
+      const quoteId = 'qc_' + Date.now();
+      db.prepare(`
+        INSERT INTO quote_cards (
+          id, job_id, company_user_id, mechanic_user_id,
+          agreed_price, scope_summary, agreed_start_time, company_confirmed_at, mechanic_confirmed_at, is_locked
+        ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'), 1)
+      `).run(
+        quoteId,
+        jobId,
+        job.company_user_id,
+        mechanic_user_id,
+        fixedPrice,
+        `Direct Hire (Urban Company style) for ${job.title}. Assigned immediately at fixed budget ₹${fixedPrice}. ETA: ${estimated_arrival || '25 mins'}.`
+      );
+
+      // Job history
+      db.prepare(`
+        INSERT INTO job_history (id, job_id, status, note, updated_by_user_id)
+        VALUES (?, ?, 'ASSIGNED', ?, ?)
+      `).run(
+        'jh_' + Date.now(),
+        jobId,
+        `Direct hire claimed by technician. Work instantly assigned at fixed rate ₹${fixedPrice}.`,
+        mechanic_user_id
+      );
+
+      // Chat message
+      const msgId = 'msg_' + Date.now();
+      db.prepare(`
+        INSERT INTO messages (id, job_id, sender_user_id, sender_role, message_text)
+        VALUES (?, ?, ?, 'mechanic', ?)
+      `).run(
+        msgId,
+        jobId,
+        mechanic_user_id,
+        `[DIRECT HIRE CLAIMED] Accepted work order at fixed rate ₹${fixedPrice}. Dispatching now with ETA ${estimated_arrival || '25 mins'}.`
+      );
+
+      io.to(`job_${jobId}`).emit('status_change', { jobId, status: 'ASSIGNED', assigned_mechanic_user_id: mechanic_user_id });
+      io.emit('job_status_change', { jobId, status: 'ASSIGNED' });
+      io.emit('proposal_update', { jobId, proposalId, action: 'direct_assigned' });
+
+      return res.json({ success: true, isDirectAssigned: true, jobId, proposalId });
+    }
+
+    // Standard Bidding Flow
     const proposalId = 'prop_' + Date.now();
     db.prepare(`
       INSERT INTO proposals(id, job_id, mechanic_user_id, proposed_price, estimated_arrival, message, status, counter_round)
-VALUES(?, ?, ?, ?, ?, ?, 'PENDING', 0)
-  `).run(
+      VALUES(?, ?, ?, ?, ?, ?, 'PENDING', 0)
+    `).run(
       proposalId,
       jobId,
       mechanic_user_id,
@@ -531,12 +638,12 @@ VALUES(?, ?, ?, ?, ?, ?, 'PENDING', 0)
     const msgId = 'msg_' + Date.now();
     db.prepare(`
       INSERT INTO messages(id, job_id, sender_user_id, sender_role, message_text)
-VALUES(?, ?, ?, 'mechanic', ?)
-  `).run(
+      VALUES(?, ?, ?, 'mechanic', ?)
+    `).run(
       msgId,
       jobId,
       mechanic_user_id,
-      `[PROPOSAL SUBMITTED]Proposed: ₹${ proposed_price } | ETA: ${ estimated_arrival || '30 mins' }."${message || ''}"`
+      `[PROPOSAL SUBMITTED] Proposed: ₹${proposed_price} | ETA: ${estimated_arrival || '30 mins'}."${message || ''}"`
     );
 
     // Notify room and broadcast
@@ -1341,6 +1448,63 @@ app.get('/api/admin/technician-deep-inspect/:userId', (req, res) => {
   } catch (err) {
     console.error('Admin technician inspect error:', err);
     res.status(500).json({ error: 'Failed to inspect technician' });
+  }
+});
+
+// Admin: Get all technicians list
+app.get('/api/admin/technicians', (req, res) => {
+  try {
+    const technicians = db.prepare(`
+      SELECT u.id, u.name, u.email, u.phone, u.avatar_url, u.is_banned, u.created_at,
+             mp.headline, mp.city, mp.rating, mp.reviews_count, mp.hourly_rate,
+             mp.verification_tier, mp.is_verified, mp.total_jobs_completed, mp.total_earnings,
+             mp.years_experience
+      FROM users u
+      JOIN mechanic_profiles mp ON u.id = mp.user_id
+      WHERE u.role = 'mechanic'
+      ORDER BY mp.is_verified ASC, u.created_at DESC
+    `).all();
+
+    res.json(technicians);
+  } catch (err) {
+    console.error('Admin technicians list error:', err);
+    res.status(500).json({ error: 'Failed to fetch technicians' });
+  }
+});
+
+// Admin: Ban/Unban technician
+app.post('/api/admin/technicians/:userId/ban', (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const user = db.prepare('SELECT is_banned FROM users WHERE id = ?').get(userId);
+    if (!user) return res.status(404).json({ error: 'Technician not found' });
+
+    const newBannedState = user.is_banned === 1 ? 0 : 1;
+    db.prepare('UPDATE users SET is_banned = ? WHERE id = ?').run(newBannedState, userId);
+    db.prepare('UPDATE mechanic_profiles SET is_banned = ? WHERE user_id = ?').run(newBannedState, userId);
+
+    res.json({ success: true, is_banned: newBannedState });
+  } catch (err) {
+    console.error('Ban error:', err);
+    res.status(500).json({ error: 'Failed to update ban status' });
+  }
+});
+
+// Admin: Delete technician
+app.delete('/api/admin/technicians/:userId', (req, res) => {
+  try {
+    const userId = req.params.userId;
+    db.prepare('DELETE FROM proposals WHERE mechanic_user_id = ?').run(userId);
+    db.prepare('DELETE FROM trusted_mechanics WHERE mechanic_user_id = ?').run(userId);
+    db.prepare('DELETE FROM mechanic_profiles WHERE user_id = ?').run(userId);
+    db.prepare('DELETE FROM wallet_transactions WHERE user_id = ?').run(userId);
+    db.prepare('DELETE FROM wallets WHERE user_id = ?').run(userId);
+    db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+
+    res.json({ success: true, message: 'Technician deleted successfully' });
+  } catch (err) {
+    console.error('Delete technician error:', err);
+    res.status(500).json({ error: 'Failed to delete technician' });
   }
 });
 

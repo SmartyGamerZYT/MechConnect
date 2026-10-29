@@ -234,6 +234,22 @@ export const api = {
     const res = await fetch(`${API_BASE}/admin/technician-deep-inspect/${userId}`);
     return res.json();
   },
+  getAdminTechnicians: async () => {
+    const res = await fetch(`${API_BASE}/admin/technicians`);
+    return res.json();
+  },
+  banTechnician: async (userId) => {
+    const res = await fetch(`${API_BASE}/admin/technicians/${userId}/ban`, {
+      method: 'POST'
+    });
+    return res.json();
+  },
+  deleteTechnician: async (userId) => {
+    const res = await fetch(`${API_BASE}/admin/technicians/${userId}`, {
+      method: 'DELETE'
+    });
+    return res.json();
+  },
 
   // Upload File/Image
   uploadFile: async (file, uploadedByUserId, entityType = 'general', entityId = null) => {

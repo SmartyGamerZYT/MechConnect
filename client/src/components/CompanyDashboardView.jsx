@@ -16,7 +16,10 @@ import {
   Trash2,
   Map as MapIcon,
   List,
-  FileText
+  FileText,
+  LineChart,
+  Layers,
+  Crosshair
 } from 'lucide-react';
 import OpenStreetMapView from './OpenStreetMapView';
 import AnalyticsGraphs from './AnalyticsGraphs';
@@ -33,15 +36,14 @@ export default function CompanyDashboardView({
   onOpenReceipt,
   onRefreshData
 }) {
+  const [activeTab, setActiveTab] = useState('operations'); // 'operations' or 'analysis'
   const [searchQuery, setSearchQuery] = useState('');
   const [filterUrgency, setFilterUrgency] = useState('ALL');
   const [filterCategory, setFilterCategory] = useState('ALL');
-  const [sortBy, setSortBy] = useState('newest'); // 'newest', 'budget_high', 'budget_low', 'most_bids'
-  const [viewMode, setViewMode] = useState('list'); // 'list' or 'map'
+  const [sortBy, setSortBy] = useState('newest');
   const [analyticsData, setAnalyticsData] = useState(null);
   const [deletingJobId, setDeletingJobId] = useState(null);
 
-  // Fetch company analytics
   useEffect(() => {
     if (currentUser?.id) {
       api.getAnalytics('company', currentUser.id)
@@ -60,11 +62,8 @@ export default function CompanyDashboardView({
   // Search & Filter & Sort
   const processedJobs = companyJobs
     .filter((job) => {
-      // Urgency filter
       if (filterUrgency !== 'ALL' && job.urgency !== filterUrgency) return false;
-      // Category filter
       if (filterCategory !== 'ALL' && !job.machine_category.toLowerCase().includes(filterCategory.toLowerCase())) return false;
-      // Search query (title, brand, model, serial_number, error_code, city)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesTitle = job.title?.toLowerCase().includes(q);
@@ -87,7 +86,6 @@ export default function CompanyDashboardView({
       return 0;
     });
 
-  // Handle Delete Work
   const handleDeleteJob = async (jobId) => {
     if (!window.confirm(`Are you sure you want to cancel and delete breakdown listing ${jobId}?`)) {
       return;
@@ -137,6 +135,33 @@ export default function CompanyDashboardView({
         </div>
       </div>
 
+      {/* Navigation Sub-Menu: Operations vs Analysis */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+        <button
+          onClick={() => setActiveTab('operations')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+            activeTab === 'operations'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <Layers className="w-3.5 h-3.5" />
+          <span>Breakdowns & Technician Map</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('analysis')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+            activeTab === 'analysis'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <LineChart className="w-3.5 h-3.5" />
+          <span>Analysis</span>
+        </button>
+      </div>
+
       {/* TOP 3 KPIS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
@@ -179,68 +204,58 @@ export default function CompanyDashboardView({
         </div>
       </div>
 
-      {/* Real-time Analytics Graphs */}
-      {analyticsData && (
-        <AnalyticsGraphs role="company" data={analyticsData} />
-      )}
-
-      {/* 12-COLUMN MAIN GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        
-        {/* 8 COLUMNS: Breakdowns Feed & Controls */}
-        <div className="lg:col-span-8 space-y-4">
+      {/* TAB 1: OPERATIONS - SIDE BY SIDE LAYOUT (MAP ON LEFT, LIST ON RIGHT) */}
+      {activeTab === 'operations' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
-            
-            {/* Control Bar: Title & View Toggle */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-              <h3 className="font-bold text-slate-900 text-sm">
-                Breakdowns & Active Listings ({processedJobs.length})
-              </h3>
-
-              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg">
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
-                    viewMode === 'list' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <List className="w-3.5 h-3.5" />
-                  <span>List</span>
-                </button>
-                <button
-                  onClick={() => setViewMode('map')}
-                  className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
-                    viewMode === 'map' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <MapIcon className="w-3.5 h-3.5" />
-                  <span>Map</span>
-                </button>
+          {/* LEFT SIDE: MAP SHOWING NEARBY AVAILABLE TECHNICIANS */}
+          <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-4 shadow-xs space-y-3 sticky top-20">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="font-bold text-xs uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-slate-700" />
+                Nearby Available Specialists
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono text-slate-500">{mechanics.length} in corridor</span>
               </div>
             </div>
 
-            {/* Search & Filter & Sort Bar */}
+            <OpenStreetMapView
+              mode="mechanics"
+              mechanics={mechanics}
+              onSelectMechanic={() => onOpenPostJob()}
+              height="530px"
+              showLocateMe={true}
+            />
+          </div>
+
+          {/* RIGHT SIDE: BREAKDOWNS & BIDS LIST */}
+          <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
+            
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900 text-sm">
+                Plant Breakdowns ({processedJobs.length})
+              </h3>
+            </div>
+
+            {/* Search, Filter & Sort */}
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 text-xs">
-              
-              {/* Search */}
               <div className="sm:col-span-5 relative">
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
                 <input
                   type="text"
-                  placeholder="Search machine, model, serial, error..."
+                  placeholder="Search machine, model, serial..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-slate-900"
                 />
               </div>
 
-              {/* Urgency Filter */}
               <div className="sm:col-span-3">
                 <select
                   value={filterUrgency}
                   onChange={(e) => setFilterUrgency(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800"
                 >
                   <option value="ALL">All Urgency</option>
                   <option value="EMERGENCY">Emergency</option>
@@ -249,196 +264,120 @@ export default function CompanyDashboardView({
                 </select>
               </div>
 
-              {/* Sort By */}
               <div className="sm:col-span-4">
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800"
                 >
                   <option value="newest">Sort: Newest First</option>
-                  <option value="budget_high">Sort: Budget (High to Low)</option>
-                  <option value="budget_low">Sort: Budget (Low to High)</option>
-                  <option value="most_bids">Sort: Most Bids Received</option>
+                  <option value="budget_high">Budget (High to Low)</option>
+                  <option value="budget_low">Budget (Low to High)</option>
+                  <option value="most_bids">Most Bids Received</option>
                 </select>
               </div>
-
             </div>
 
-            {/* View Mode: Map View vs List View */}
-            {viewMode === 'map' ? (
-              <div className="space-y-2 pt-2">
-                <div className="text-xs text-slate-500 flex items-center justify-between">
-                  <span>Interactive OpenStreetMap showing certified field technicians nearby</span>
-                  <span className="font-mono text-[10px]">{mechanics.length} specialists in area</span>
+            {/* Listings Stream */}
+            <div className="divide-y divide-slate-100 max-h-[580px] overflow-y-auto pr-1">
+              {processedJobs.length === 0 ? (
+                <div className="py-12 text-center text-xs text-slate-400">
+                  No breakdown listings match the search criteria.
                 </div>
-                <OpenStreetMapView
-                  mode="mechanics"
-                  mechanics={mechanics}
-                  onSelectMechanic={(mechId) => onOpenPostJob()}
-                  height="450px"
-                />
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {processedJobs.length === 0 ? (
-                  <div className="py-10 text-center text-xs text-slate-400">
-                    No breakdown listings match the current search and filter criteria.
-                  </div>
-                ) : (
-                  processedJobs.map((job) => {
-                    const isEmerg = job.urgency === 'EMERGENCY';
-                    const isDirect = job.hiring_mode === 'DIRECT';
-                    const isCompleted = job.status === 'COMPLETED';
+              ) : (
+                processedJobs.map((job) => {
+                  const isEmerg = job.urgency === 'EMERGENCY';
+                  const isDirect = job.hiring_mode === 'DIRECT';
+                  const isCompleted = job.status === 'COMPLETED';
 
-                    return (
-                      <div
-                        key={job.id}
-                        className="py-3.5 hover:bg-slate-50/70 transition rounded-lg px-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
-                      >
-                        <div className="space-y-0.5 flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded ${
-                              isEmerg
-                                ? 'bg-red-50 text-red-700 border border-red-200'
-                                : 'bg-slate-100 text-slate-700 border border-slate-200'
-                            }`}>
-                              {job.urgency}
-                            </span>
-                            <span className="text-[10px] font-mono text-slate-400">{job.id}</span>
-                            <span className="text-[10px] font-mono text-slate-500">
-                              {isDirect ? 'Direct Hire' : 'Bidding'}
-                            </span>
-                            {job.serial_number && (
-                              <span className="text-[10px] font-mono text-slate-400 hidden sm:inline">
-                                S/N: {job.serial_number}
-                              </span>
-                            )}
-                          </div>
-
-                          <h4 className="font-semibold text-xs text-slate-900 truncate">{job.title}</h4>
-                          <div className="text-[11px] text-slate-500 flex items-center gap-2">
-                            <span>{job.machine_category}</span>
-                            <span>&bull;</span>
-                            <span>Status: <b className="text-slate-800 font-mono">{job.status}</b></span>
-                            {job.assigned_mechanic_name && (
-                              <>
-                                <span>&bull;</span>
-                                <span className="text-slate-700">Assigned: {job.assigned_mechanic_name}</span>
-                              </>
-                            )}
-                          </div>
+                  return (
+                    <div
+                      key={job.id}
+                      className="py-3 hover:bg-slate-50/70 transition rounded-lg px-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5"
+                    >
+                      <div className="space-y-0.5 flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-[10px] font-mono font-semibold px-1.5 py-0.2 rounded ${
+                            isEmerg ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            {job.urgency}
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-400">{job.id}</span>
+                          <span className="text-[10px] font-mono text-slate-500">
+                            {isDirect ? 'Direct' : 'Bids'}
+                          </span>
                         </div>
 
-                        <div className="flex items-center gap-3 self-end sm:self-center">
-                          <div className="text-right">
-                            <div className="font-mono font-bold text-slate-900 text-xs">
-                              {job.agreed_price ? `₹${job.agreed_price.toLocaleString()}` : job.budget_min ? `₹${job.budget_min.toLocaleString()} - ₹${job.budget_max?.toLocaleString()}` : 'Open'}
-                            </div>
-                            <div className="text-[10px] text-slate-400 font-mono">
-                              {job.proposals_count || 0} bids
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1.5">
-                            {/* Receipt Button if completed */}
-                            {isCompleted && onOpenReceipt && (
-                              <button
-                                onClick={() => onOpenReceipt(job.id)}
-                                title="View Completion Receipt / Invoice"
-                                className="px-2 py-1 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer"
-                              >
-                                <FileText className="w-3 h-3 text-emerald-700" />
-                                <span>Receipt</span>
-                              </button>
-                            )}
-
-                            <button
-                              onClick={() => onOpenChat(job.id)}
-                              title="Chat"
-                              className="w-7 h-7 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-600 transition cursor-pointer"
-                            >
-                              <MessageSquare className="w-3.5 h-3.5" />
-                            </button>
-
-                            <button
-                              onClick={() => onSelectJob(job.id)}
-                              className="bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs px-2.5 py-1.5 rounded-lg transition cursor-pointer"
-                            >
-                              Details
-                            </button>
-
-                            {/* Delete Work Button (if not completed) */}
-                            {!isCompleted && (
-                              <button
-                                onClick={() => handleDeleteJob(job.id)}
-                                disabled={deletingJobId === job.id}
-                                title="Delete / Cancel Listing"
-                                className="w-7 h-7 rounded-lg border border-slate-200 hover:border-red-300 hover:bg-red-50 text-slate-400 hover:text-red-600 flex items-center justify-center transition cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
+                        <h4 className="font-semibold text-xs text-slate-900 truncate">{job.title}</h4>
+                        <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                          <span>{job.machine_category}</span>
+                          <span>&bull;</span>
+                          <span>Status: <b className="text-slate-800 font-mono">{job.status}</b></span>
                         </div>
-
                       </div>
-                    );
-                  })
-                )}
-              </div>
-            )}
 
-          </div>
-        </div>
+                      <div className="flex items-center gap-2 self-end sm:self-center">
+                        <div className="text-right">
+                          <div className="font-mono font-bold text-slate-900 text-xs">
+                            {job.agreed_price ? `₹${job.agreed_price.toLocaleString()}` : job.budget_min ? `₹${job.budget_min.toLocaleString()}` : 'Open'}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            {job.proposals_count || 0} bids
+                          </div>
+                        </div>
 
-        {/* 4 COLUMNS: Side Direct Hire Specialists Panel */}
-        <div className="lg:col-span-4 space-y-4">
-          
-          {emergencyJobs.length > 0 && (
-            <div className="bg-red-50 border-l-4 border-red-600 p-3.5 rounded-lg text-xs space-y-1">
-              <div className="font-semibold text-red-900 flex items-center gap-1.5">
-                <AlertTriangle className="w-4 h-4 text-red-600" />
-                Emergency Ticket Active
-              </div>
-              <div className="text-red-700">
-                {emergencyJobs.length} breakdown under emergency response protocol.
-              </div>
-            </div>
-          )}
+                        <div className="flex items-center gap-1">
+                          {isCompleted && onOpenReceipt && (
+                            <button
+                              onClick={() => onOpenReceipt(job.id)}
+                              className="px-2 py-1 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-semibold flex items-center gap-1 cursor-pointer"
+                            >
+                              <FileText className="w-3 h-3 text-emerald-600" />
+                              <span>Receipt</span>
+                            </button>
+                          )}
 
-          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs space-y-3">
-            <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider border-b border-slate-100 pb-2">
-              Direct Hire Available Specialists
-            </h3>
+                          <button
+                            onClick={() => onOpenChat(job.id)}
+                            className="w-7 h-7 rounded border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-600 cursor-pointer"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                          </button>
 
-            <div className="space-y-2">
-              {mechanics.slice(0, 4).map((mech) => (
-                <div
-                  key={mech.user_id}
-                  className="p-2.5 border border-slate-100 rounded-lg flex items-center justify-between gap-2 hover:border-slate-200 transition"
-                >
-                  <div className="min-w-0">
-                    <div className="font-semibold text-xs text-slate-900 truncate">{mech.full_name}</div>
-                    <div className="text-[10px] text-slate-500 font-mono">
-                      Rating {mech.rating} &bull; ₹{mech.hourly_rate}/hr
+                          <button
+                            onClick={() => onSelectJob(job.id)}
+                            className="bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs px-2.5 py-1 rounded transition cursor-pointer"
+                          >
+                            Details
+                          </button>
+
+                          {!isCompleted && (
+                            <button
+                              onClick={() => handleDeleteJob(job.id)}
+                              disabled={deletingJobId === job.id}
+                              title="Delete Work Order"
+                              className="w-7 h-7 rounded border border-slate-200 hover:border-red-300 hover:bg-red-50 text-slate-400 hover:text-red-600 flex items-center justify-center cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-
-                  <button
-                    onClick={onOpenPostJob}
-                    className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-[11px] px-2.5 py-1 rounded-md transition cursor-pointer"
-                  >
-                    Direct Hire
-                  </button>
-                </div>
-              ))}
+                  );
+                })
+              )}
             </div>
+
           </div>
 
         </div>
-
-      </div>
+      ) : (
+        /* TAB 2: ANALYSIS MENU - DEDICATED GRAPHS VIEW WITH LINE CHARTS */
+        <div className="space-y-4">
+          <AnalyticsGraphs role="company" data={analyticsData} />
+        </div>
+      )}
 
     </div>
   );

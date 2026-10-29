@@ -287,6 +287,14 @@ try {
   // Already exists
 }
 
+// Migration for is_banned
+try {
+  db.exec("ALTER TABLE users ADD COLUMN is_banned INTEGER DEFAULT 0");
+} catch (e) {}
+try {
+  db.exec("ALTER TABLE mechanic_profiles ADD COLUMN is_banned INTEGER DEFAULT 0");
+} catch (e) {}
+
 // Ensure all users have a wallet
 try {
   const allUsers = db.prepare('SELECT id, role FROM users').all();
